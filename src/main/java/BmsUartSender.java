@@ -17,6 +17,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -39,6 +40,7 @@ public class BmsUartSender {
     private final boolean requireInitialConnection;
     private final boolean debugFrames;
     private final Random simulatorRandom = new Random();
+    private final SimulatedPack simulatedPack;
 
     private SerialPort port;
     private InputStream in;
@@ -57,6 +59,7 @@ public class BmsUartSender {
         this.simulatorMode = "SIMULATED".equalsIgnoreCase(portName);
         this.requireInitialConnection = hasFlag(args, "--require-open");
         this.debugFrames = "1".equals(env("TINYBMS_DEBUG_FRAMES", "0"));
+        this.simulatedPack = new SimulatedPack(simulatorRandom, clamp(safeInt(env("BMS_SIM_CELL_COUNT", "4"), 4), 1, 32));
     }
 
     public void start() {
@@ -210,16 +213,7 @@ public class BmsUartSender {
     }
 
     private TinyBmsSnapshot buildSimulatedSnapshot() {
-        float voltage = (float) (12.5 + simulatorRandom.nextDouble() * 2.2);
-        float current = (float) (-8.0 + simulatorRandom.nextDouble() * 18.0);
-        double socPercent = 45.0 + simulatorRandom.nextDouble() * 50.0;
-        long socRaw = Math.round(socPercent * 1_000_000.0);
-        int status = 155;
-        List<Integer> cells = new ArrayList<>();
-        for (int i = 0; i < 4; i++) {
-            cells.add(3300 + simulatorRandom.nextInt(700));
-        }
-        return new TinyBmsSnapshot(voltage, current, socRaw, status, cells);
+        return simulatedPack.nextSnapshot();
     }
 
     private TinyBmsSnapshot readSnapshot() throws Exception {
@@ -246,8 +240,8 @@ public class BmsUartSender {
     private String formatBmsLine(TinyBmsSnapshot s) {
         StringBuilder sb = new StringBuilder();
         sb.append("BMS,").append(moduleId).append(",");
-        sb.append(String.format("%.3f", s.voltageV)).append(",");
-        sb.append(String.format("%.3f", s.currentA)).append(",");
+        sb.append(String.format(Locale.US, "%.3f", s.voltageV)).append(",");
+        sb.append(String.format(Locale.US, "%.3f", s.currentA)).append(",");
         sb.append(s.socRaw).append(",");
         sb.append(s.statusCode);
 
@@ -548,6 +542,22 @@ public class BmsUartSender {
         return value == null || value.trim().isEmpty() ? fallback : value.trim();
     }
 
+    private static int safeInt(String value, int fallback) {
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (Exception ex) {
+            return fallback;
+        }
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
     private String resolvePortName(String[] args) {
         String fallback = env("SERIAL_PORT", "COM5");
         if (args == null || args.length == 0) {
@@ -616,6 +626,71 @@ public class BmsUartSender {
             this.socRaw = soc;
             this.statusCode = status;
             this.cellsMv = cells;
+        }
+    }
+
+    private static final class SimulatedPack {
+        private final Random random;
+        private final int cellCount;
+        private final double[] cellOffsetsMv;
+        private double socPercent;
+        private double averageCellMv;
+        private double currentA;
+
+        SimulatedPack(Random random, int cellCount) {
+            this.random = random;
+            this.cellCount = cellCount;
+            this.socPercent = 55.0 + random.nextDouble() * 25.0;
+            this.averageCellMv = 3650.0 + random.nextDouble() * 250.0;
+            this.cellOffsetsMv = new double[cellCount];
+            for (int i = 0; i < cellOffsetsMv.length; i++) {
+                cellOffsetsMv[i] = -8.0 + random.nextDouble() * 16.0;
+            }
+        }
+
+        TinyBmsSnapshot nextSnapshot() {
+            updateState();
+            List<Integer> cells = buildCells();
+            int sumMv = 0;
+            for (Integer cell : cells) {
+                sumMv += cell;
+            }
+
+            float packVoltage = sumMv / 1000.0f;
+            float current = (float) currentA;
+            long socRaw = Math.round(socPercent * 1_000_000.0);
+            int status = Math.abs(currentA) < 0.50 ? 0 : (currentA > 0.0 ? 0x33 : 0x31);
+            return new TinyBmsSnapshot(packVoltage, current, socRaw, status, cells);
+        }
+
+        private void updateState() {
+            double modeRoll = random.nextDouble();
+            if (modeRoll < 0.70) {
+                currentA = -0.20 + random.nextDouble() * 0.40;
+            } else if (modeRoll < 0.88) {
+                currentA = 0.8 + random.nextDouble() * 4.2;
+            } else {
+                currentA = -(0.6 + random.nextDouble() * 3.5);
+            }
+
+            socPercent = clamp(socPercent - (currentA * 0.004) + ((random.nextDouble() - 0.5) * 0.02), 5.0, 99.0);
+            double targetCellMv = 3000.0 + (socPercent / 100.0) * 1150.0;
+            averageCellMv += (targetCellMv - averageCellMv) * 0.03 + (random.nextDouble() - 0.5) * 2.0;
+            averageCellMv = clamp(averageCellMv, 3000.0, 4200.0);
+
+            for (int i = 0; i < cellOffsetsMv.length; i++) {
+                cellOffsetsMv[i] = clamp(cellOffsetsMv[i] + (random.nextDouble() - 0.5) * 0.8, -18.0, 18.0);
+            }
+        }
+
+        private List<Integer> buildCells() {
+            List<Integer> cells = new ArrayList<>();
+            for (int i = 0; i < cellCount; i++) {
+                double sagMv = currentA > 0.0 ? currentA * 1.5 : currentA * 0.7;
+                int cellMv = (int) Math.round(clamp(averageCellMv + cellOffsetsMv[i] - sagMv, 2800.0, 4250.0));
+                cells.add(cellMv);
+            }
+            return cells;
         }
     }
 }
