@@ -2,6 +2,7 @@ import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import com.fazecast.jSerialComm.SerialPort;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -1914,15 +1915,7 @@ public class BmsApiServer {
 		uartStartedAt = null;
 		if (process != null) {
 			appendUartLog("[UART] Stopping sender");
-			process.destroy();
-			try {
-				process.waitFor(2, TimeUnit.SECONDS);
-			} catch (InterruptedException ex) {
-				Thread.currentThread().interrupt();
-			}
-			if (process.isAlive()) {
-				process.destroyForcibly();
-			}
+			stopProcessTree(process.toHandle(), "[UART] Stopping sender process");
 		}
 	}
 
@@ -1943,6 +1936,7 @@ public class BmsApiServer {
 		} catch (InterruptedException ex) {
 			Thread.currentThread().interrupt();
 		}
+		waitForSerialPortAvailable(normalizedPort, parseIntEnv("SERIAL_BAUD", 115200), 5000L);
 		return shouldRestart;
 	}
 
@@ -1972,15 +1966,69 @@ public class BmsApiServer {
 			})
 			.forEach(handle -> {
 				appendUartLog(logMessage + " (pid " + handle.pid() + ")");
-				handle.destroy();
-				try {
-					handle.onExit().get(2, TimeUnit.SECONDS);
-				} catch (Exception ignored) {
-				}
-				if (handle.isAlive()) {
-					handle.destroyForcibly();
-				}
+				stopProcessTree(handle, logMessage);
 			});
+	}
+
+	private static void stopProcessTree(ProcessHandle root, String logPrefix) {
+		if (root == null) {
+			return;
+		}
+		List<ProcessHandle> handles = new ArrayList<>();
+		root.descendants().forEach(handles::add);
+		Collections.reverse(handles);
+		handles.add(root);
+
+		for (ProcessHandle handle : handles) {
+			if (!handle.isAlive()) {
+				continue;
+			}
+			appendUartLog(logPrefix + " pid " + handle.pid());
+			handle.destroy();
+		}
+
+		long deadline = System.currentTimeMillis() + 3000L;
+		for (ProcessHandle handle : handles) {
+			while (handle.isAlive() && System.currentTimeMillis() < deadline) {
+				try {
+					Thread.sleep(50L);
+				} catch (InterruptedException ex) {
+					Thread.currentThread().interrupt();
+					break;
+				}
+			}
+		}
+
+		for (ProcessHandle handle : handles) {
+			if (handle.isAlive()) {
+				appendUartLog(logPrefix + " force kill pid " + handle.pid());
+				handle.destroyForcibly();
+			}
+		}
+	}
+
+	private static void waitForSerialPortAvailable(String serialPort, int baudRate, long timeoutMillis) {
+		if (!isSupportedSerialPort(serialPort) || "SIMULATED".equalsIgnoreCase(serialPort)) {
+			return;
+		}
+		long deadline = System.currentTimeMillis() + timeoutMillis;
+		while (System.currentTimeMillis() < deadline) {
+			SerialPort probe = SerialPort.getCommPort(serialPort);
+			probe.setComPortParameters(baudRate, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
+			probe.setComPortTimeouts(SerialPort.TIMEOUT_NONBLOCKING, 0, 0);
+			if (probe.openPort(500)) {
+				probe.closePort();
+				appendUartLog("[UART] " + serialPort + " is available for maintenance command");
+				return;
+			}
+			try {
+				Thread.sleep(150L);
+			} catch (InterruptedException ex) {
+				Thread.currentThread().interrupt();
+				return;
+			}
+		}
+		appendUartLog("[UART] " + serialPort + " did not become available before maintenance command");
 	}
 
 	private static void startUartLogPump(Process process) {
