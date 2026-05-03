@@ -108,6 +108,7 @@ body {
 .metric {
 	display: flex;
 	justify-content: space-between;
+	gap: 12px;
 	border-top: 1px solid #2f3b4d;
 	padding-top: 8px;
 	margin-top: 8px;
@@ -116,6 +117,8 @@ body {
 
 .metric strong {
 	color: var(--text);
+	text-align: right;
+	overflow-wrap: anywhere;
 }
 
 table {

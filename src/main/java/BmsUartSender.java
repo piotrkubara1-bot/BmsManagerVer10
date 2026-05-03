@@ -25,6 +25,9 @@ import java.util.concurrent.TimeUnit;
 public class BmsUartSender {
 
     private static final Path NATIVE_TMP_DIR = prepareNativeTempDirectory();
+    private static final int FRAME_TIMEOUT_MS = 1200;
+    private static final int MIN_REAL_CELL_MV = 500;
+    private static final int MAX_REAL_CELL_MV = 5000;
 
     private final String portName;
     private final int baudRate;
@@ -211,8 +214,9 @@ public class BmsUartSender {
         Float voltage = readFloat(0x14);
         if (voltage == null) return null;
 
-        Float current = readFloat(0x15);
-        if (current == null) return null;
+        Float currentRaw = readFloat(0x15);
+        if (currentRaw == null) return null;
+        float current = normalizeCurrent(currentRaw);
 
         Long socRaw = readUInt32(0x1A);
         if (socRaw == null) return null;
@@ -272,41 +276,15 @@ public class BmsUartSender {
 
     // --- UART Helpers ---
 
-    private byte[] sendRaw(byte[] data, int expectedLen) throws IOException {
+    private synchronized byte[] sendRaw(byte[] data, int expectedLen) throws IOException {
         if (!connected || port == null || in == null || out == null) return null;
 
+        drainInput();
         byte[] pkt = addCRC(data);
         out.write(pkt);
         out.flush();
 
-        byte[] buf = new byte[expectedLen];
-        int totalRead = 0;
-        long deadline = System.currentTimeMillis() + 1000;
-
-        while (totalRead < expectedLen && System.currentTimeMillis() < deadline) {
-            int available = in.available();
-            if (available > 0) {
-                int read = in.read(buf, totalRead, expectedLen - totalRead);
-                if (read > 0) {
-                    totalRead += read;
-                }
-            } else {
-                try {
-                    Thread.sleep(10);
-                } catch (InterruptedException ignored) {
-                    Thread.currentThread().interrupt();
-                    return null;
-                }
-            }
-        }
-
-        if (totalRead < expectedLen) {
-            return null;
-        }
-
-        if (buf[0] != (byte) 0xAA) return null;
-
-        return buf;
+        return readFixedFrame(data[1] & 0xFF, expectedLen, FRAME_TIMEOUT_MS);
     }
 
     private Float readFloat(int cmd) throws IOException {
@@ -327,46 +305,141 @@ public class BmsUartSender {
         return ByteBuffer.wrap(r, 2, 2).order(ByteOrder.LITTLE_ENDIAN).getShort() & 0xFFFF;
     }
 
-    private List<Integer> readCellVoltages() throws IOException {
-        byte[] cmd = addCRC(new byte[]{(byte) 0xAA, 0x1C});
+    private synchronized List<Integer> readCellVoltages() throws IOException {
         if (out == null || in == null) return null;
 
+        drainInput();
+        byte[] cmd = addCRC(new byte[]{(byte) 0xAA, 0x1C});
         out.write(cmd);
         out.flush();
 
-        byte[] header = new byte[3];
-        int read = in.read(header);
-        if (read < 3 || header[0] != (byte) 0xAA || header[1] != 0x1C) return null;
+        byte[] header = readHeader(0x1C, FRAME_TIMEOUT_MS);
+        if (header == null) return null;
 
         int payloadLen = header[2] & 0xFF;
-        byte[] body = new byte[payloadLen + 2];
-        int totalBodyRead = 0;
-        long deadline = System.currentTimeMillis() + 1000;
-
-        while (totalBodyRead < body.length && System.currentTimeMillis() < deadline) {
-            int r = in.read(body, totalBodyRead, body.length - totalBodyRead);
-            if (r > 0) {
-                totalBodyRead += r;
-            } else {
-                try {
-                    Thread.sleep(10);
-                } catch (InterruptedException ignored) {
-                    Thread.currentThread().interrupt();
-                    return null;
-                }
-            }
+        if (payloadLen <= 0 || (payloadLen % 2) != 0 || payloadLen > 64) {
+            return null;
         }
 
-        if (totalBodyRead < body.length) return null;
+        byte[] body = new byte[payloadLen + 2];
+        if (!readFullyWithTimeout(body, 0, body.length, FRAME_TIMEOUT_MS)) return null;
 
         int cellCount = payloadLen / 2;
         List<Integer> cells = new ArrayList<>();
         for (int i = 0; i < cellCount; i++) {
             int v = ((body[i * 2 + 1] & 0xFF) << 8) | (body[i * 2] & 0xFF);
-            int cellMv = (v >= 10000) ? v / 10 : v;
-            cells.add(cellMv);
+            int cellMv = normalizeCellMv(v);
+            if (cellMv > 0) {
+                cells.add(cellMv);
+            }
         }
         return cells;
+    }
+
+    private byte[] readFixedFrame(int expectedCommand, int expectedLen, int timeoutMs) throws IOException {
+        byte[] header = readHeader(expectedCommand, timeoutMs);
+        if (header == null) {
+            return null;
+        }
+
+        byte[] frame = new byte[expectedLen];
+        frame[0] = header[0];
+        frame[1] = header[1];
+        int remaining = expectedLen - 2;
+        if (!readFullyWithTimeout(frame, 2, remaining, timeoutMs)) {
+            return null;
+        }
+        return frame;
+    }
+
+    private byte[] readHeader(int expectedCommand, int timeoutMs) throws IOException {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            int first = readByteUntil(deadline);
+            if (first < 0) {
+                return null;
+            }
+            if (first != 0xAA) {
+                continue;
+            }
+
+            int command = readByteUntil(deadline);
+            if (command < 0) {
+                return null;
+            }
+            if (command != expectedCommand) {
+                continue;
+            }
+
+            if (expectedCommand == 0x1C) {
+                int payloadLen = readByteUntil(deadline);
+                if (payloadLen < 0) {
+                    return null;
+                }
+                return new byte[] {(byte) 0xAA, (byte) command, (byte) payloadLen};
+            }
+            return new byte[] {(byte) 0xAA, (byte) command};
+        }
+        return null;
+    }
+
+    private int readByteUntil(long deadline) throws IOException {
+        while (System.currentTimeMillis() < deadline) {
+            if (in.available() > 0) {
+                return in.read() & 0xFF;
+            }
+            sleepBriefly();
+        }
+        return -1;
+    }
+
+    private boolean readFullyWithTimeout(byte[] target, int offset, int length, int timeoutMs) throws IOException {
+        int total = 0;
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (total < length && System.currentTimeMillis() < deadline) {
+            int available = in.available();
+            if (available > 0) {
+                int read = in.read(target, offset + total, Math.min(length - total, available));
+                if (read > 0) {
+                    total += read;
+                }
+            } else {
+                sleepBriefly();
+            }
+        }
+        return total == length;
+    }
+
+    private void drainInput() throws IOException {
+        if (in == null) {
+            return;
+        }
+        while (in.available() > 0) {
+            in.read(new byte[Math.min(in.available(), 256)]);
+        }
+    }
+
+    private void sleepBriefly() {
+        try {
+            Thread.sleep(10);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private float normalizeCurrent(float raw) {
+        if (!Float.isFinite(raw)) {
+            return 0.0f;
+        }
+        return Math.abs(raw) > 200.0f ? raw / 1000.0f : raw;
+    }
+
+    private int normalizeCellMv(int raw) {
+        int mv = raw >= 10000 ? Math.round(raw / 10.0f) : raw;
+        if (mv < MIN_REAL_CELL_MV || mv > MAX_REAL_CELL_MV) {
+            return -1;
+        }
+        return mv;
     }
 
     private byte[] addCRC(byte[] d) {

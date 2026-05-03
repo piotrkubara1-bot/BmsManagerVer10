@@ -1118,7 +1118,7 @@ public class FXMLController {
 		for (int i = 0; i < history.size(); i++) {
 			HistoryPoint point = history.get(i);
 			int x = i + 1;
-			voltageSeries.getData().add(new XYChart.Data<>(x, point.voltage / 10.0));
+			voltageSeries.getData().add(new XYChart.Data<>(x, point.voltage));
 			currentSeries.getData().add(new XYChart.Data<>(x, point.current));
 			socSeries.getData().add(new XYChart.Data<>(x, point.soc));
 			statusSeries.getData().add(new XYChart.Data<>(x, point.statusCode));

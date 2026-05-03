@@ -53,16 +53,14 @@
 					</select>
 				</label>
 				<label>
-					Time Window
-					<select id="statsTimeRange">
-						<option value="5">Last 5 min</option>
-						<option value="15">Last 15 min</option>
-						<option value="30">Last 30 min</option>
-						<option value="60" selected>Last 1 hour</option>
-						<option value="180">Last 3 hours</option>
-						<option value="360">Last 6 hours</option>
-						<option value="720">Last 12 hours</option>
-						<option value="1440">Last 24 hours</option>
+					Saved Samples
+					<select id="statsSampleLimit">
+						<option value="50">Latest 50</option>
+						<option value="100" selected>Latest 100</option>
+						<option value="200">Latest 200</option>
+						<option value="500">Latest 500</option>
+						<option value="1000">Latest 1000</option>
+						<option value="2000">Latest 2000</option>
 					</select>
 				</label>
 				<button id="statsReloadBtn" type="button">Reload</button>

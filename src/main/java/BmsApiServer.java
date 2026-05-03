@@ -44,6 +44,8 @@ public class BmsApiServer {
 	private static final int EVENT_RPI_DISCONNECTED = 9002;
 	private static final int EVENT_BMS_DISCONNECTED = 9003;
 	private static final int MAX_UART_LOG_LINES = 60;
+	private static final int MIN_REAL_CELL_MV = 500;
+	private static final int MAX_REAL_CELL_MV = 5000;
 
 	private static final Object LOCK = new Object();
 	private static final Map<Integer, BmsReading> latestByModule = new ConcurrentHashMap<>();
@@ -332,6 +334,7 @@ public class BmsApiServer {
 				return IngestResult.rejected();
 			}
 			modulesSeen.add(reading.moduleId);
+			updateDetectedSeriesCells(reading);
 
 			synchronized (LOCK) {
 				latestByModule.put(reading.moduleId, reading);
@@ -452,8 +455,8 @@ public class BmsApiServer {
 			return null;
 		}
 
-		double voltage = safeDouble(parts[index], 0.0);
-		double current = safeDouble(parts[index + 1], 0.0);
+		double voltage = normalizeVoltage(safeDouble(parts[index], 0.0), parts.length - (index + 4));
+		double current = normalizeCurrent(safeDouble(parts[index + 1], 0.0));
 		double socRaw = safeDouble(parts[index + 2], 0.0);
 		int statusCode = safeInt(parts[index + 3], 0);
 		double socPercent = socRaw > 1000.0 ? socRaw / 1_000_000.0 : socRaw;
@@ -461,7 +464,10 @@ public class BmsApiServer {
 		List<Integer> cells = new ArrayList<>();
 		for (int i = index + 4; i < parts.length; i++) {
 			if (isInteger(parts[i])) {
-				cells.add(safeInt(parts[i], 0));
+				int cellMv = normalizeCellMv(safeInt(parts[i], 0));
+				if (cellMv > 0) {
+					cells.add(cellMv);
+				}
 			}
 		}
 
@@ -475,6 +481,47 @@ public class BmsApiServer {
 		reading.cellMv = cells;
 		reading.rawLine = line;
 		return reading;
+	}
+
+	private static double normalizeVoltage(double rawVoltage, int detectedCellFields) {
+		if (!Double.isFinite(rawVoltage)) {
+			return 0.0;
+		}
+		if (rawVoltage > 1000.0) {
+			return rawVoltage / 1000.0;
+		}
+		if (rawVoltage > 100.0 && detectedCellFields > 0) {
+			return rawVoltage / 10.0;
+		}
+		return rawVoltage;
+	}
+
+	private static double normalizeCurrent(double rawCurrent) {
+		if (!Double.isFinite(rawCurrent)) {
+			return 0.0;
+		}
+		return Math.abs(rawCurrent) > 200.0 ? rawCurrent / 1000.0 : rawCurrent;
+	}
+
+	private static int normalizeCellMv(int rawCellMv) {
+		int cellMv = rawCellMv >= 10000 ? (int) Math.round(rawCellMv / 10.0) : rawCellMv;
+		if (cellMv < MIN_REAL_CELL_MV || cellMv > MAX_REAL_CELL_MV) {
+			return -1;
+		}
+		return cellMv;
+	}
+
+	private static void updateDetectedSeriesCells(BmsReading reading) {
+		if (reading == null || reading.cellMv == null || reading.cellMv.isEmpty()) {
+			return;
+		}
+		SettingDefinition definition = getSettingDefinition("series_cells");
+		if (definition == null) {
+			return;
+		}
+		double value = reading.cellMv.size();
+		cellSettingsByModule.computeIfAbsent(reading.moduleId, ignored -> new ConcurrentHashMap<>()).put(definition.key, value);
+		persistSetting(reading.moduleId, definition, value);
 	}
 
 	private static BmsEvent parseEvent(String line) {
@@ -623,8 +670,8 @@ public class BmsApiServer {
 					Timestamp createdAt = rs.getTimestamp("created_at");
 					reading.timestamp = toIsoTimestamp(createdAt);
 					reading.moduleId = rs.getInt("module_id");
-					reading.voltageV = rs.getDouble("voltage_v");
-					reading.currentA = rs.getDouble("current_a");
+					reading.voltageV = normalizeVoltage(rs.getDouble("voltage_v"), 0);
+					reading.currentA = normalizeCurrent(rs.getDouble("current_a"));
 					reading.socPercent = rs.getDouble("soc_percent");
 					reading.statusCode = rs.getInt("status_code");
 					reading.rawLine = rs.getString("raw_line");
@@ -664,7 +711,10 @@ public class BmsApiServer {
 					long readingId = rs.getLong("reading_id");
 					BmsReading reading = byId.get(readingId);
 					if (reading != null) {
-						reading.cellMv.add(rs.getInt("cell_mv"));
+						int cellMv = normalizeCellMv(rs.getInt("cell_mv"));
+						if (cellMv > 0) {
+							reading.cellMv.add(cellMv);
+						}
 					}
 				}
 			}
@@ -1543,6 +1593,13 @@ public class BmsApiServer {
 			}
 
 			String message;
+			boolean restartUart = false;
+			synchronized (BmsApiServer.class) {
+				restartUart = uartProcess != null && serialPort.equalsIgnoreCase(uartProcessPort);
+				if (restartUart) {
+					stopUartProcess();
+				}
+			}
 			try (TinyBmsUartSettingsService uart = new TinyBmsUartSettingsService(serialPort, parseIntEnv("SERIAL_BAUD", 115200))) {
 				switch (action) {
 					case "reset":
@@ -1562,8 +1619,23 @@ public class BmsApiServer {
 						return;
 				}
 			} catch (Exception ex) {
+				if (restartUart) {
+					try {
+						startUartProcess(serialPort);
+					} catch (Exception restartEx) {
+						appendUartLog("[UART] Failed to restart sender after maintenance command: " + restartEx.getMessage());
+					}
+				}
 				writeJson(exchange, 500, "{\"error\":\"" + escapeJson(ex.getMessage()) + "\"}");
 				return;
+			}
+			if (restartUart) {
+				try {
+					startUartProcess(serialPort);
+					message += " UART sender restarted.";
+				} catch (Exception restartEx) {
+					message += " UART sender restart failed: " + restartEx.getMessage();
+				}
 			}
 
 			writeJson(exchange, 200, "{\"ok\":true,\"action\":\"" + escapeJson(action) + "\",\"serialPort\":\"" + escapeJson(serialPort) + "\",\"message\":\"" + escapeJson(message) + "\"}");

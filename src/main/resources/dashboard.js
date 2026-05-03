@@ -4,7 +4,7 @@ let cachedRuntimeConfig = null;
 let cachedUartStatus = null;
 const statsState = {
 	moduleId: 1,
-	sinceMinutes: 60,
+	sampleLimit: 100,
 	zoomedChartKey: null
 };
 const CHART_COLORS = ["#58a6ff", "#29d391", "#ffc75f", "#ff8b94", "#8ad6ff", "#9d7dff", "#f89b29", "#7ddf64"];
@@ -60,6 +60,9 @@ function renderLive(modules) {
 	grid.innerHTML = modules.map((item) => {
 		const cells = Array.isArray(item.cellsMv) ? item.cellsMv : [];
 		const statusInfo = describeStatus(item.statusCode);
+		const cellText = cells.length
+			? `${cells.length} cells: ${cells.map((mv) => `${Number(mv)} mV`).join(" / ")}`
+			: "-";
 		return `
 			<div class="module-card">
 				<h3>Module ${item.moduleId}</h3>
@@ -67,7 +70,7 @@ function renderLive(modules) {
 				<div class="metric"><span>Current</span><strong>${Number(item.currentA).toFixed(3)} A</strong></div>
 				<div class="metric"><span>SOC</span><strong>${Number(item.socPercent).toFixed(2)} %</strong></div>
 				<div class="metric"><span>Status</span><strong title="${escapeHtml(statusInfo.note)}">${item.statusCode} (${escapeHtml(statusInfo.label)})</strong></div>
-				<div class="metric"><span>Cells</span><strong>${cells.length ? cells.join(" /") : "-"}</strong></div>
+				<div class="metric"><span>Cells</span><strong>${escapeHtml(cellText)}</strong></div>
 			</div>
 		`;
 	}).join("");
@@ -93,9 +96,9 @@ function renderEvents(events) {
 
 function renderStats(stats, moduleId) {
 	const container = document.getElementById("statsCards");
-	const timeLabel = formatMinutesLabel(statsState.sinceMinutes);
+	const sampleLabel = `Latest ${statsState.sampleLimit}`;
 	if (!Array.isArray(stats) || stats.length === 0) {
-		container.innerHTML = `<div class='stats-card'>No statistics available yet for module ${moduleId} in ${timeLabel}.</div>`;
+		container.innerHTML = `<div class='stats-card'>No saved samples available yet for module ${moduleId}.</div>`;
 		return;
 	}
 
@@ -108,26 +111,12 @@ function renderStats(stats, moduleId) {
 			<div class="metric"><span>SOC Range</span><strong>${Number(item.minSoc).toFixed(2)} - ${Number(item.maxSoc).toFixed(2)} %</strong></div>
 			<div class="metric"><span>Voltage Range</span><strong>${Number(item.minVoltage).toFixed(3)} - ${Number(item.maxVoltage).toFixed(3)} V</strong></div>
 			<div class="metric"><span>Current Range</span><strong>${Number(item.minCurrent).toFixed(3)} - ${Number(item.maxCurrent).toFixed(3)} A</strong></div>
-			<div class="metric"><span>Time Window</span><strong>${timeLabel}</strong></div>
+			<div class="metric"><span>Saved Samples</span><strong>${sampleLabel}</strong></div>
 			<div class="metric"><span>Points</span><strong>${item.sampleCount}</strong></div>
 			<div class="metric"><span>Last Status</span><strong title="${escapeHtml(lastStatus.note)}">${item.lastStatusCode} (${escapeHtml(lastStatus.label)})</strong></div>
 			<div class="metric"><span>Last Timestamp</span><strong>${item.lastTimestamp || "-"}</strong></div>
 		</div>
 	`;
-}
-
-function formatMinutesLabel(minutes) {
-	const value = Number(minutes);
-	if (!Number.isFinite(value) || value <= 0) {
-		return "All time";
-	}
-	if (value < 60) {
-		return `${value} min`;
-	}
-	if (value % 60 === 0) {
-		return `${value / 60} h`;
-	}
-	return `${value} min`;
 }
 
 function describeStatus(code) {
@@ -262,7 +251,7 @@ function renderStatisticsCharts(history, moduleId) {
 	const zoomedKey = statsState.zoomedChartKey;
 
 	const ordered = [...history].reverse();
-	const voltage = ordered.map((item) => Number(item.voltageV/10));
+	const voltage = ordered.map((item) => Number(item.voltageV));
 	const current = ordered.map((item) => Number(item.currentA));
 	const soc = ordered.map((item) => Number(item.socPercent));
 	const status = ordered.map((item) => Number(item.statusCode));
@@ -344,42 +333,42 @@ function renderStatisticsCharts(history, moduleId) {
 	container.innerHTML = charts.join("");
 }
 
-function sanitizeTimeRange(value) {
+function sanitizeSampleLimit(value) {
 	const parsed = Number(value);
 	if (!Number.isFinite(parsed)) {
-		return statsState.sinceMinutes;
+		return statsState.sampleLimit;
 	}
-	return Math.min(1440, Math.max(5, Math.round(parsed)));
+	return Math.min(2000, Math.max(1, Math.round(parsed)));
 }
 
 function wireStatisticsControls() {
 	const moduleSelect = document.getElementById("statsModuleFilter");
-	const rangeSelect = document.getElementById("statsTimeRange");
+	const sampleLimitSelect = document.getElementById("statsSampleLimit");
 	const reloadButton = document.getElementById("statsReloadBtn");
 	const chartsContainer = document.getElementById("statsCharts");
 
-	if (!moduleSelect || !rangeSelect || !reloadButton || !chartsContainer) {
+	if (!moduleSelect || !sampleLimitSelect || !reloadButton || !chartsContainer) {
 		return;
 	}
 
 	statsState.moduleId = Number(moduleSelect.value) || 1;
-	statsState.sinceMinutes = sanitizeTimeRange(rangeSelect.value);
-	rangeSelect.value = String(statsState.sinceMinutes);
+	statsState.sampleLimit = sanitizeSampleLimit(sampleLimitSelect.value);
+	sampleLimitSelect.value = String(statsState.sampleLimit);
 
 	moduleSelect.addEventListener("change", async () => {
 		statsState.moduleId = Number(moduleSelect.value) || 1;
 		await refreshStatistics();
 	});
 
-	rangeSelect.addEventListener("change", async () => {
-		statsState.sinceMinutes = sanitizeTimeRange(rangeSelect.value);
-		rangeSelect.value = String(statsState.sinceMinutes);
+	sampleLimitSelect.addEventListener("change", async () => {
+		statsState.sampleLimit = sanitizeSampleLimit(sampleLimitSelect.value);
+		sampleLimitSelect.value = String(statsState.sampleLimit);
 		await refreshStatistics();
 	});
 
 	reloadButton.addEventListener("click", async () => {
-		statsState.sinceMinutes = sanitizeTimeRange(rangeSelect.value);
-		rangeSelect.value = String(statsState.sinceMinutes);
+		statsState.sampleLimit = sanitizeSampleLimit(sampleLimitSelect.value);
+		sampleLimitSelect.value = String(statsState.sampleLimit);
 		await refreshStatistics();
 	});
 
@@ -417,17 +406,12 @@ function wireStatisticsControls() {
 
 async function refreshStatistics() {
 	const moduleId = statsState.moduleId;
-	const sinceMinutes = statsState.sinceMinutes;
+	const sampleLimit = statsState.sampleLimit;
 
 	try {
-		const [statsResponse, historyResponse] = await Promise.all([
-			fetch(`${API_BASE}/api/statistics?moduleId=${moduleId}&sinceMinutes=${sinceMinutes}`),
-			fetch(`${API_BASE}/api/history?moduleId=${moduleId}&sinceMinutes=${sinceMinutes}&limit=2000`)
-		]);
-		const [stats, history] = await Promise.all([
-			statsResponse.json(),
-			historyResponse.json()
-		]);
+		const historyResponse = await fetch(`${API_BASE}/api/history?moduleId=${moduleId}&limit=${sampleLimit}`);
+		const history = await historyResponse.json();
+		const stats = buildStatsFromHistory(history, moduleId);
 		renderStats(stats, moduleId);
 		renderStatisticsCharts(history, moduleId);
 	} catch (err) {
@@ -689,6 +673,48 @@ async function refreshRuntimeConfig() {
 	} catch (error) {
 		renderRuntimeConfig(null);
 	}
+}
+
+function buildStatsFromHistory(history, moduleId) {
+	if (!Array.isArray(history) || history.length === 0) {
+		return [];
+	}
+	const values = history.filter((item) => Number(item.moduleId) === Number(moduleId));
+	if (!values.length) {
+		return [];
+	}
+	const soc = values.map((item) => Number(item.socPercent)).filter(Number.isFinite);
+	const voltage = values.map((item) => Number(item.voltageV)).filter(Number.isFinite);
+	const current = values.map((item) => Number(item.currentA)).filter(Number.isFinite);
+	const latest = values[0];
+	return [{
+		moduleId,
+		avgSoc: average(soc),
+		minSoc: minOrZero(soc),
+		maxSoc: maxOrZero(soc),
+		minVoltage: minOrZero(voltage),
+		maxVoltage: maxOrZero(voltage),
+		minCurrent: minOrZero(current),
+		maxCurrent: maxOrZero(current),
+		sampleCount: values.length,
+		lastStatusCode: Number(latest.statusCode) || 0,
+		lastTimestamp: latest.timestamp || ""
+	}];
+}
+
+function average(values) {
+	if (!values.length) {
+		return 0;
+	}
+	return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function minOrZero(values) {
+	return values.length ? Math.min(...values) : 0;
+}
+
+function maxOrZero(values) {
+	return values.length ? Math.max(...values) : 0;
 }
 
 function wireUartControls() {
