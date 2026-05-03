@@ -1554,12 +1554,16 @@ public class BmsApiServer {
 			String action = firstNonBlank(params.get("action"), "").toLowerCase(Locale.ROOT);
 			if ("start".equals(action)) {
 				String requestedPort = firstNonBlank(params.get("serialPort"), params.get("port"), readConfigValue("SERIAL_PORT", "COM5"));
-				startUartProcess(requestedPort);
-				writeJson(exchange, 200, uartStatusJson("started"));
+				try {
+					startUartProcess(requestedPort);
+					writeJson(exchange, 200, uartStatusJson("started"));
+				} catch (Exception ex) {
+					writeJson(exchange, 500, "{\"error\":\"" + escapeJson(ex.getMessage()) + "\"}");
+				}
 				return;
 			}
 			if ("stop".equals(action)) {
-				stopUartProcess();
+				stopAllUartProcesses();
 				writeJson(exchange, 200, uartStatusJson("stopped"));
 				return;
 			}
@@ -1849,12 +1853,11 @@ public class BmsApiServer {
 	}
 
 	private static synchronized void startUartProcess(String port) throws IOException {
-		stopUartProcess();
-
 		String normalizedPort = firstNonBlank(port, "COM5").trim().toUpperCase(Locale.ROOT);
 		if (!isSupportedSerialPort(normalizedPort)) {
 			throw new IOException("serialPort must look like COM3, COM5 or SIMULATED");
 		}
+		stopAllUartProcesses();
 
 		Path workDir = Path.of(".").toAbsolutePath().normalize();
 		ProcessBuilder builder = new ProcessBuilder("cmd", "/c", "run_uart_sender.bat", "--no-pause", normalizedPort);
@@ -1867,6 +1870,18 @@ public class BmsApiServer {
 		uartProcessPort = normalizedPort;
 		uartStartedAt = Instant.now();
 		startUartLogPump(process);
+		try {
+			Thread.sleep(1200L);
+		} catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			throw new IOException("UART start interrupted.", ex);
+		}
+		if (!process.isAlive()) {
+			uartProcess = null;
+			uartProcessPort = "";
+			uartStartedAt = null;
+			throw new IOException("UART sender exited immediately. Check port " + normalizedPort + " and logs below.");
+		}
 	}
 
 	private static synchronized void stopUartProcess() {
@@ -1898,15 +1913,42 @@ public class BmsApiServer {
 		}
 
 		String normalizedPort = firstNonBlank(serialPort, "").trim().toUpperCase(Locale.ROOT);
+		stopExternalUartProcesses("", "[UART] Stopping external sender before maintenance command on " + normalizedPort);
+
+		try {
+			Thread.sleep(800L);
+		} catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+		}
+		return shouldRestart;
+	}
+
+	private static synchronized void stopAllUartProcesses() {
+		stopUartProcess();
+		stopExternalUartProcesses("", "[UART] Stopping external UART sender");
+	}
+
+	private static void stopExternalUartProcesses(String portFilter, String logMessage) {
+		String normalizedFilter = firstNonBlank(portFilter, "").trim().toUpperCase(Locale.ROOT);
+		String workspace = Path.of(".").toAbsolutePath().normalize().toString().toUpperCase(Locale.ROOT);
 		ProcessHandle.allProcesses()
 			.filter(handle -> handle.pid() != ProcessHandle.current().pid())
 			.filter(handle -> {
 				String commandLine = handle.info().commandLine().orElse("").toUpperCase(Locale.ROOT);
-				return commandLine.contains("BMSUARTSENDER")
-					&& (commandLine.contains(normalizedPort) || commandLine.contains("--PORT=" + normalizedPort));
+				boolean isJavaSender = commandLine.contains("BMSUARTSENDER");
+				boolean isBatchSender = commandLine.contains("RUN_UART_SENDER.BAT");
+				if (!isJavaSender && !isBatchSender) {
+					return false;
+				}
+				if (isBatchSender && !commandLine.contains(workspace)) {
+					return false;
+				}
+				return normalizedFilter.isEmpty()
+					|| commandLine.contains(normalizedFilter)
+					|| commandLine.contains("--PORT=" + normalizedFilter);
 			})
 			.forEach(handle -> {
-				appendUartLog("[UART] Stopping external sender before maintenance command on " + normalizedPort);
+				appendUartLog(logMessage + " (pid " + handle.pid() + ")");
 				handle.destroy();
 				try {
 					handle.onExit().get(2, TimeUnit.SECONDS);
@@ -1916,13 +1958,6 @@ public class BmsApiServer {
 					handle.destroyForcibly();
 				}
 			});
-
-		try {
-			Thread.sleep(800L);
-		} catch (InterruptedException ex) {
-			Thread.currentThread().interrupt();
-		}
-		return shouldRestart;
 	}
 
 	private static void startUartLogPump(Process process) {
