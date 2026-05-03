@@ -1860,7 +1860,7 @@ public class BmsApiServer {
 		stopAllUartProcesses();
 
 		Path workDir = Path.of(".").toAbsolutePath().normalize();
-		ProcessBuilder builder = new ProcessBuilder("cmd", "/c", "run_uart_sender.bat", "--no-pause", normalizedPort);
+		ProcessBuilder builder = new ProcessBuilder("cmd", "/c", "run_uart_sender.bat", "--no-pause", normalizedPort, "--require-open");
 		builder.directory(workDir.toFile());
 		builder.redirectErrorStream(true);
 
@@ -1871,7 +1871,7 @@ public class BmsApiServer {
 		uartStartedAt = Instant.now();
 		startUartLogPump(process);
 		try {
-			Thread.sleep(1200L);
+			Thread.sleep(4000L);
 		} catch (InterruptedException ex) {
 			Thread.currentThread().interrupt();
 			throw new IOException("UART start interrupted.", ex);

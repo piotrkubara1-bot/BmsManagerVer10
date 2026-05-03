@@ -5,6 +5,7 @@ call "%~dp0load_env.bat" >nul 2>nul
 
 set "PORT_ARG="
 set "NO_PAUSE=0"
+set "EXTRA_JAVA_ARGS="
 if not "%~1"=="" (
     if /I "%~1"=="--no-pause" (
         set "NO_PAUSE=1"
@@ -14,6 +15,10 @@ if not "%~1"=="" (
         if /I "%~2"=="--no-pause" set "NO_PAUSE=1"
     )
 )
+if /I "%~1"=="--require-open" set "EXTRA_JAVA_ARGS=!EXTRA_JAVA_ARGS! --require-open"
+if /I "%~2"=="--require-open" set "EXTRA_JAVA_ARGS=!EXTRA_JAVA_ARGS! --require-open"
+if /I "%~3"=="--require-open" set "EXTRA_JAVA_ARGS=!EXTRA_JAVA_ARGS! --require-open"
+if /I "%~4"=="--require-open" set "EXTRA_JAVA_ARGS=!EXTRA_JAVA_ARGS! --require-open"
 set "JAVA_ARGS="
 if not "%PORT_ARG%"=="" (
     if /I "%PORT_ARG:~0,7%"=="--port=" (
@@ -60,5 +65,7 @@ if "%JAVA_ARGS%"=="" (
 ) else (
     echo Konfiguracja: PORT override=!JAVA_ARGS!, URL=!BMS_API_INGEST_URL!
 )
-"%JAVA_EXE%" -cp "bin;lib/*" BmsUartSender %JAVA_ARGS%
+"%JAVA_EXE%" -cp "bin;lib/*" BmsUartSender %JAVA_ARGS% %EXTRA_JAVA_ARGS%
+set "EXIT_CODE=%ERRORLEVEL%"
 if not "%NO_PAUSE%"=="1" pause
+exit /b %EXIT_CODE%

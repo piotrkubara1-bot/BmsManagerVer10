@@ -35,6 +35,7 @@ public class BmsUartSender {
     private final String ingestUrl;
     private final int pollIntervalMs;
     private final boolean simulatorMode;
+    private final boolean requireInitialConnection;
     private final Random simulatorRandom = new Random();
 
     private SerialPort port;
@@ -51,6 +52,7 @@ public class BmsUartSender {
         this.ingestUrl = env("BMS_API_INGEST_URL", "http://127.0.0.1:8090/api/ingest");
         this.pollIntervalMs = Integer.parseInt(env("TINYBMS_POLL_INTERVAL_MS", "2000"));
         this.simulatorMode = "SIMULATED".equalsIgnoreCase(portName);
+        this.requireInitialConnection = hasFlag(args, "--require-open");
     }
 
     public void start() {
@@ -64,6 +66,12 @@ public class BmsUartSender {
         }
 
         initPort();
+        if (requireInitialConnection && !connected) {
+            System.err.println("[BmsUartSender] Initial connection failed. Exiting because --require-open was used.");
+            scheduler.shutdownNow();
+            System.exit(2);
+            return;
+        }
 
         scheduler.scheduleAtFixedRate(this::sendHeartbeat, 0, 10, TimeUnit.SECONDS);
         scheduler.scheduleAtFixedRate(this::pollAndSend, 1000, pollIntervalMs, TimeUnit.MILLISECONDS);
@@ -491,6 +499,18 @@ public class BmsUartSender {
         }
 
         return normalizePort(fallback);
+    }
+
+    private boolean hasFlag(String[] args, String flag) {
+        if (args == null || flag == null) {
+            return false;
+        }
+        for (String arg : args) {
+            if (flag.equalsIgnoreCase(arg == null ? "" : arg.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String normalizePort(String value) {
