@@ -88,7 +88,7 @@ echo [Service] Mode: simulate4 - modules 1..4
 
 :start_api
 echo [Service] Starting BmsApiServer on port %BMS_API_PORT% ...
-start "BmsApiServer" /D "%~dp0" /B "%JAVA_EXE%" -cp "bin;lib/*" BmsApiServer
+start "BmsApiServer" /D "%~dp0" /B "%JAVA_EXE%" --enable-native-access=ALL-UNNAMED -cp "bin;lib/*" BmsApiServer
 
 set /a __attempt=0
 :wait_api
@@ -113,10 +113,10 @@ exit /b 0
 
 :run_sim_single
 echo [Service] Starting simulator feed - single module ...
-"%JAVA_EXE%" -cp "bin;lib/*" BmsTestFeeder --mode=single --module=1 --count=%BMS_SIM_COUNT% --interval-ms=%BMS_SIM_INTERVAL_MS% --endpoint=http://127.0.0.1:%BMS_API_PORT%/api/ingest
+"%JAVA_EXE%" --enable-native-access=ALL-UNNAMED -cp "bin;lib/*" BmsTestFeeder --mode=single --module=1 --count=%BMS_SIM_COUNT% --interval-ms=%BMS_SIM_INTERVAL_MS% --endpoint=http://127.0.0.1:%BMS_API_PORT%/api/ingest
 exit /b %ERRORLEVEL%
 
 :run_sim_multi
 echo [Service] Starting simulator feed - 4 modules ...
-"%JAVA_EXE%" -cp "bin;lib/*" BmsTestFeeder --mode=multi --count=%BMS_SIM_COUNT% --interval-ms=%BMS_SIM_INTERVAL_MS% --endpoint=http://127.0.0.1:%BMS_API_PORT%/api/ingest
+"%JAVA_EXE%" --enable-native-access=ALL-UNNAMED -cp "bin;lib/*" BmsTestFeeder --mode=multi --count=%BMS_SIM_COUNT% --interval-ms=%BMS_SIM_INTERVAL_MS% --endpoint=http://127.0.0.1:%BMS_API_PORT%/api/ingest
 exit /b %ERRORLEVEL%

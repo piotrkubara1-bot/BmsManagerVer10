@@ -470,6 +470,7 @@ public class BmsApiServer {
 				}
 			}
 		}
+		voltage = reconcilePackVoltageWithCells(voltage, cells);
 
 		BmsReading reading = new BmsReading();
 		reading.timestamp = Instant.now().toString();
@@ -494,6 +495,26 @@ public class BmsApiServer {
 			return rawVoltage / 10.0;
 		}
 		return rawVoltage;
+	}
+
+	private static double reconcilePackVoltageWithCells(double packVoltage, List<Integer> cells) {
+		if (cells == null || cells.isEmpty()) {
+			return packVoltage;
+		}
+		int sumMv = 0;
+		for (Integer cellMv : cells) {
+			if (cellMv != null && cellMv > 0) {
+				sumMv += cellMv;
+			}
+		}
+		if (sumMv <= 0) {
+			return packVoltage;
+		}
+		double cellsVoltage = sumMv / 1000.0;
+		if (!Double.isFinite(packVoltage) || packVoltage <= 0.0) {
+			return cellsVoltage;
+		}
+		return Math.abs(cellsVoltage - packVoltage) >= 0.20 ? cellsVoltage : packVoltage;
 	}
 
 	private static double normalizeCurrent(double rawCurrent) {

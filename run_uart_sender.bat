@@ -65,7 +65,7 @@ if "%JAVA_ARGS%"=="" (
 ) else (
     echo Konfiguracja: PORT override=!JAVA_ARGS!, URL=!BMS_API_INGEST_URL!
 )
-"%JAVA_EXE%" -cp "bin;lib/*" BmsUartSender %JAVA_ARGS% %EXTRA_JAVA_ARGS%
+"%JAVA_EXE%" --enable-native-access=ALL-UNNAMED -cp "bin;lib/*" BmsUartSender %JAVA_ARGS% %EXTRA_JAVA_ARGS%
 set "EXIT_CODE=%ERRORLEVEL%"
 if not "%NO_PAUSE%"=="1" pause
 exit /b %EXIT_CODE%
