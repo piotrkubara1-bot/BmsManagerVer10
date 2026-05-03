@@ -14,14 +14,16 @@ if /I "%MODE%"=="stop" (
 
 if "%BMS_API_PORT%"=="" set "BMS_API_PORT=8090"
 if "%WEB_UI_PORT%"=="" set "WEB_UI_PORT=8088"
+set "BMS_API_PORT=%BMS_API_PORT: =%"
+set "WEB_UI_PORT=%WEB_UI_PORT: =%"
 
 call "%~dp0stop_all.bat" >nul 2>nul
-timeout /t 1 /nobreak >nul
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command "Start-Sleep -Seconds 1" >nul 2>nul
 
 echo [FullStack] Starting service mode: %MODE%
 start "BMS-Service" /D "%~dp0" /B cmd /c "set BMS_API_PORT=%BMS_API_PORT% && call run_service.bat %MODE%"
 
-timeout /t 2 /nobreak >nul
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command "Start-Sleep -Seconds 2" >nul 2>nul
 
 echo [FullStack] Starting Web UI on port %WEB_UI_PORT%
 start "BMS-WebUI" /D "%~dp0" /B cmd /c "set WEB_UI_PORT=%WEB_UI_PORT% && call run_web_ui.bat"

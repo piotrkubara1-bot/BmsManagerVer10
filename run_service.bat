@@ -39,6 +39,7 @@ if errorlevel 1 (
 )
 
 if "%BMS_API_PORT%"=="" set "BMS_API_PORT=8090"
+set "BMS_API_PORT=%BMS_API_PORT: =%"
 if "%BMS_SIM_COUNT%"=="" set "BMS_SIM_COUNT=120"
 if "%BMS_SIM_INTERVAL_MS%"=="" set "BMS_SIM_INTERVAL_MS=1000"
 if "%BMS_STOP_EXISTING%"=="" set "BMS_STOP_EXISTING=1"
@@ -47,6 +48,14 @@ if "%BMS_STARTUP_DELAY_SEC%"=="" set "BMS_STARTUP_DELAY_SEC=1"
 
 if "%BMS_STOP_EXISTING%"=="1" (
     "%POWERSHELL_EXE%" -NoProfile -Command "$listeners = Get-NetTCPConnection -LocalPort %BMS_API_PORT% -State Listen -ErrorAction SilentlyContinue; if ($listeners) { $listeners | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }" >nul 2>nul
+    for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":%BMS_API_PORT% .*LISTENING"') do taskkill /F /PID %%P >nul 2>nul
+    "%POWERSHELL_EXE%" -NoProfile -Command "Start-Sleep -Seconds 1" >nul 2>nul
+    curl.exe -fsS "http://127.0.0.1:%BMS_API_PORT%/api/health" >nul 2>nul
+    if not errorlevel 1 (
+        echo [Service] API is already running on port %BMS_API_PORT%.
+        echo [Service] If this is stale, run .\stop_all.bat and start again.
+        exit /b 0
+    )
 )
 
 if /I "%MODE%"=="normal" goto :mode_normal
@@ -83,11 +92,11 @@ start "BmsApiServer" /D "%~dp0" /B "%JAVA_EXE%" -cp "bin;lib/*" BmsApiServer
 
 set /a __attempt=0
 :wait_api
-"%POWERSHELL_EXE%" -NoProfile -Command "try { Invoke-RestMethod -Uri 'http://127.0.0.1:%BMS_API_PORT%/api/health' -Method Get | Out-Null; exit 0 } catch { exit 1 }" >nul 2>nul
+curl.exe -fsS "http://127.0.0.1:%BMS_API_PORT%/api/health" >nul 2>nul
 if not errorlevel 1 goto :api_ok
 set /a __attempt+=1
 if %__attempt% GEQ %BMS_STARTUP_RETRIES% goto :api_fail
-timeout /t %BMS_STARTUP_DELAY_SEC% /nobreak >nul
+"%POWERSHELL_EXE%" -NoProfile -Command "Start-Sleep -Seconds %BMS_STARTUP_DELAY_SEC%" >nul 2>nul
 goto :wait_api
 
 :api_fail

@@ -4,6 +4,14 @@ setlocal
 call "%~dp0load_env.bat" >nul 2>nul
 
 if "%WEB_UI_PORT%"=="" set "WEB_UI_PORT=8088"
+set "WEB_UI_PORT=%WEB_UI_PORT: =%"
+
+curl.exe -fsS "http://127.0.0.1:%WEB_UI_PORT%/dashboard.html" >nul 2>nul
+if not errorlevel 1 (
+    echo [WebUI] Web UI is already running on port %WEB_UI_PORT%.
+    exit /b 0
+)
+
 if not exist bin mkdir bin
 set "JAVAC_EXE="
 set "JAVA_EXE="

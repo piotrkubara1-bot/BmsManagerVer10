@@ -22,6 +22,7 @@ if /I "%~1"=="stop" (
 
 echo [Stack] Stopping old backend/Web UI listeners...
 call "%~dp0stop_all.bat" >nul 2>nul
+"%POWERSHELL_EXE%" -NoProfile -Command "Start-Sleep -Seconds 1" >nul 2>nul
 
 echo [Stack] Ensuring MySQL is running...
 "%POWERSHELL_EXE%" -NoProfile -Command "$ok = Test-NetConnection -ComputerName '%DB_HOST_LOCAL%' -Port %DB_PORT_LOCAL% -WarningAction SilentlyContinue; if ($ok.TcpTestSucceeded) { exit 0 } else { exit 1 }" >nul 2>nul
@@ -44,7 +45,7 @@ if %__db_attempt% GEQ 20 (
     echo [Stack] MySQL did not start on %DB_HOST_LOCAL%:%DB_PORT_LOCAL%.
     exit /b 1
 )
-timeout /t 1 /nobreak >nul
+"%POWERSHELL_EXE%" -NoProfile -Command "Start-Sleep -Seconds 1" >nul 2>nul
 goto :wait_mysql
 
 :mysql_ready
