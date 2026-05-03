@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BmsManagerVer10 - dokumentacja dewelopera</title>
+  <style>
+    :root {
+      --bg: #0e1623;
+      --panel: #152235;
+      --panel-2: #1c2c43;
+      --ink: #edf5ff;
+      --muted: #adc1dc;
+      --line: #38506f;
+      --blue: #6ea8fe;
+      --green: #75d99d;
+      --amber: #ffd166;
+      --orange: #ff7a3d;
+      --red: #ff7b7b;
+      --code: #0a111c;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+      background:
+        radial-gradient(circle at 15% 0%, rgba(110, 168, 254, 0.18), transparent 28rem),
+        radial-gradient(circle at 85% 10%, rgba(117, 217, 157, 0.10), transparent 24rem),
+        var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+    }
+
+    a { color: var(--blue); }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      min-height: 100vh;
+    }
+
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      padding: 24px 18px;
+      background: rgba(10, 17, 28, 0.92);
+      border-right: 1px solid var(--line);
+    }
+
+    main {
+      padding: 34px;
+      max-width: 1480px;
+      width: 100%;
+    }
+
+    h1, h2, h3 { line-height: 1.15; }
+    h1 { margin: 0 0 12px; font-size: clamp(2rem, 4vw, 4.2rem); }
+    h2 { margin: 46px 0 16px; font-size: 2rem; }
+    h3 { margin: 24px 0 10px; color: var(--ink); }
+
+    .subtitle {
+      max-width: 940px;
+      color: var(--muted);
+      font-size: 1.08rem;
+    }
+
+    .logo {
+      font-weight: 800;
+      font-size: 1.25rem;
+      letter-spacing: 0.05em;
+      margin-bottom: 18px;
+    }
+
+    .navlink {
+      display: block;
+      padding: 9px 10px;
+      margin: 4px 0;
+      border-radius: 10px;
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    .navlink:hover, .navlink.active {
+      background: var(--panel-2);
+      color: var(--ink);
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 14px;
+      margin: 24px 0;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(21, 34, 53, 0.94);
+      backdrop-filter: blur(10px);
+    }
+
+    input, select, button {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0d1725;
+      color: var(--ink);
+      padding: 10px 12px;
+      font: inherit;
+    }
+
+    input { min-width: 280px; flex: 1; }
+
+    button {
+      cursor: pointer;
+      background: #213750;
+      font-weight: 700;
+    }
+
+    button:hover { border-color: var(--blue); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .card, details {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(21, 34, 53, 0.86);
+      padding: 18px;
+      box-shadow: 0 16px 42px rgba(0, 0, 0, 0.18);
+    }
+
+    details { margin: 12px 0; }
+    summary { cursor: pointer; font-weight: 800; color: var(--ink); }
+    summary::marker { color: var(--orange); }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 9px;
+      margin: 2px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(10, 17, 28, 0.64);
+      font-size: 0.88rem;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .flow .node {
+      position: relative;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #111d2e;
+      min-height: 92px;
+    }
+
+    .node strong { color: var(--blue); display: block; margin-bottom: 5px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 14px;
+      margin: 12px 0;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th { background: #20334d; }
+    td { background: rgba(17, 29, 46, 0.75); }
+
+    code, pre {
+      font-family: "Cascadia Mono", Consolas, monospace;
+      background: var(--code);
+      color: #dceaff;
+      border-radius: 10px;
+    }
+
+    code { padding: 2px 5px; }
+    pre { padding: 14px; overflow: auto; border: 1px solid var(--line); }
+
+    .tag-backend { color: var(--blue); }
+    .tag-uart { color: var(--amber); }
+    .tag-ui { color: var(--green); }
+    .tag-android { color: #b48cff; }
+    .tag-script { color: var(--orange); }
+
+    .hidden { display: none !important; }
+    .muted { color: var(--muted); }
+    .warning { color: var(--amber); }
+    .danger { color: var(--red); }
+
+    @media (max-width: 980px) {
+      .shell { grid-template-columns: 1fr; }
+      aside { position: static; height: auto; }
+      main { padding: 18px; }
+      .toolbar { position: static; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <aside>
+    <div class="logo">BmsManagerVer10</div>
+    <a class="navlink" href="#start">Start</a>
+    <a class="navlink" href="#architecture">Architektura</a>
+    <a class="navlink" href="#dependencies">Zaleznosci</a>
+    <a class="navlink" href="#data-flow">Przeplyw danych</a>
+    <a class="navlink" href="#runtime">Uruchamianie</a>
+    <a class="navlink" href="#api">Endpointy API</a>
+    <a class="navlink" href="#database">Baza danych</a>
+    <a class="navlink" href="#protocol">TinyBMS UART</a>
+    <a class="navlink" href="#function-catalog">Katalog funkcji</a>
+    <a class="navlink" href="#debugging">Debugowanie</a>
+    <a class="navlink" href="#changes">Jak rozwijac projekt</a>
+  </aside>
+
+  <main>
+    <section id="start">
+      <h1>Dokumentacja dewelopera</h1>
+      <p class="subtitle">
+        Ten plik opisuje projekt BmsManagerVer10 od strony technicznej: co od czego zalezy,
+        jak plyna dane, po co istnieja klasy i funkcje, jak dziala UART, baza danych,
+        Web GUI, desktop viewer i aplikacja Android. Dokument jest interaktywny: uzyj wyszukiwarki,
+        filtra warstw i zwijanych sekcji.
+      </p>
+
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="Szukaj: UART, BmsApiServer, /api/latest, CRC, Android...">
+        <select id="layerFilter" title="Filtr warstwy">
+          <option value="all">Wszystkie warstwy</option>
+          <option value="backend">Backend Java</option>
+          <option value="uart">UART / TinyBMS</option>
+          <option value="ui">Web / Desktop UI</option>
+          <option value="android">Android</option>
+          <option value="script">Skrypty</option>
+          <option value="database">Baza danych</option>
+        </select>
+        <button id="expandAll" type="button">Rozwin wszystko</button>
+        <button id="collapseAll" type="button">Zwin wszystko</button>
+      </div>
+
+      <div class="grid">
+        <div class="card" data-layer="backend">
+          <h3 class="tag-backend">Backend API</h3>
+          <p>Klasa <code>BmsApiServer</code> przyjmuje dane, normalizuje je, zapisuje do MySQL i wystawia endpointy dla aplikacji.</p>
+        </div>
+        <div class="card" data-layer="uart">
+          <h3 class="tag-uart">UART TinyBMS</h3>
+          <p><code>BmsUartSender</code> odczytuje BMS po porcie COM albo generuje dane <code>SIMULATED</code>.</p>
+        </div>
+        <div class="card" data-layer="ui">
+          <h3 class="tag-ui">Web i Desktop</h3>
+          <p><code>dashboard.html/js/css</code> renderuje Web GUI, a <code>DesktopWebGuiApp</code> pokazuje je w oknie JavaFX.</p>
+        </div>
+        <div class="card" data-layer="android">
+          <h3 class="tag-android">Android</h3>
+          <p>Aplikacja mobilna odpytuje API przez Wi-Fi i pokazuje podglad danych z bazy/serwera.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="architecture" data-layer="backend ui uart android database script">
+      <h2>Architektura w skrocie</h2>
+      <div class="flow">
+        <div class="node"><strong>TinyBMS</strong>Fizyczne urzadzenie wysyla dane przez UART/COM.</div>
+        <div class="node"><strong>BmsUartSender</strong>Odczytuje ramki TinyBMS albo tworzy dane symulowane.</div>
+        <div class="node"><strong>/api/ingest</strong>Backend przyjmuje linie <code>BMS,...</code>, <code>EVENT,...</code>, <code>HEARTBEAT,...</code>.</div>
+        <div class="node"><strong>MySQL/MariaDB</strong>Zapisuje telemetrie, cele, eventy, status zrodel i ustawienia.</div>
+        <div class="node"><strong>Web GUI</strong>Odpytuje API, pokazuje dane live, eventy, statystyki i ustawienia.</div>
+        <div class="node"><strong>Android</strong>Laczy sie z komputerem po IP LAN i wyswietla dane mobilnie.</div>
+      </div>
+
+      <details open>
+        <summary>Dlaczego projekt jest podzielony na kilka czesci?</summary>
+        <p>
+          Taki podzial pozwala uruchomic backend i baze bez podlaczonego BMS, testowac przez symulator,
+          a interfejsy traktowac jako osobne klienty API. Dzieki temu awaria Androida albo Desktop Viewera
+          nie zatrzymuje zapisu danych z BMS.
+        </p>
+      </details>
+    </section>
+
+    <section id="dependencies" data-layer="backend ui uart android database script">
+      <h2>Zaleznosci</h2>
+      <div class="grid">
+        <div class="card" data-layer="backend">
+          <h3>Java JDK</h3>
+          <p>Potrzebne do kompilacji i uruchamiania klas Java. Skrypty uzywaja <code>javac</code> i <code>java</code>.</p>
+        </div>
+        <div class="card" data-layer="database">
+          <h3>XAMPP MariaDB/MySQL</h3>
+          <p>Baza dziala lokalnie zwykle na <code>127.0.0.1:3306</code>. Schemat tworzy plik <code>bms_schema.sql</code>.</p>
+        </div>
+        <div class="card" data-layer="uart">
+          <h3>jSerialComm</h3>
+          <p>Biblioteka <code>lib/jSerialComm-2.11.0.jar</code> otwiera porty COM i odczytuje TinyBMS.</p>
+        </div>
+        <div class="card" data-layer="ui">
+          <h3>JavaFX</h3>
+          <p>Uzywane przez klasy <code>MainGUI</code>, <code>FXMLController</code> i <code>DesktopWebGuiApp</code>.</p>
+        </div>
+        <div class="card" data-layer="android">
+          <h3>Android Gradle Plugin</h3>
+          <p>Projekt Android znajduje sie w <code>mobile-viewer-android</code> i wymaga JDK 17 lub nowszego.</p>
+        </div>
+      </div>
+
+      <details>
+        <summary>Najwazniejsze pliki zaleznosci</summary>
+        <table>
+          <tr><th>Plik</th><th>Po co istnieje</th></tr>
+          <tr><td><code>pom.xml</code></td><td>Konfiguracja Mavena dla JavaFX, MySQL connectora i jSerialComm.</td></tr>
+          <tr><td><code>lib/*.jar</code></td><td>Lokalne biblioteki uzywane przez skrypty bez Mavena.</td></tr>
+          <tr><td><code>mobile-viewer-android/build.gradle.kts</code></td><td>Konfiguracja pluginu Androida.</td></tr>
+          <tr><td><code>mobile-viewer-android/app/build.gradle.kts</code></td><td>Konfiguracja aplikacji mobilnej.</td></tr>
+        </table>
+      </details>
+    </section>
+
+    <section id="data-flow" data-layer="backend uart ui android database">
+      <h2>Przeplyw danych szczegolowo</h2>
+      <details open data-layer="uart backend">
+        <summary>1. Odczyt UART albo symulator</summary>
+        <p>
+          <code>BmsUartSender</code> dziala jako proces w tle. Gdy port to <code>SIMULATED</code>,
+          tworzy realistyczna telemetrie: napiecie pakietu jest suma cel, prad zwykle jest blisko 0 A,
+          a SOC zmienia sie powoli. Gdy port to <code>COMx</code>, sender wysyla komendy TinyBMS i parsuje odpowiedzi.
+        </p>
+      </details>
+
+      <details data-layer="backend">
+        <summary>2. Przyjecie danych przez backend</summary>
+        <p>
+          Endpoint <code>/api/ingest</code> przyjmuje tekst. Funkcja <code>ingestLine</code> rozpoznaje typ:
+          <code>BMS</code>, <code>EVENT</code> albo <code>HEARTBEAT</code>. Dane BMS ida do <code>parseBms</code>,
+          eventy do <code>parseEvent</code>, heartbeat aktualizuje status komunikacji.
+        </p>
+      </details>
+
+      <details data-layer="database">
+        <summary>3. Zapis do bazy</summary>
+        <p>
+          <code>persistReading</code> zapisuje rekord do <code>bms_readings</code> i cele do
+          <code>bms_cell_readings</code>. <code>persistEvent</code> zapisuje eventy do <code>bms_events</code>.
+          Status zrodel zapisywany jest w <code>bms_ingest_sources</code>.
+        </p>
+      </details>
+
+      <details data-layer="ui android">
+        <summary>4. Odczyt przez aplikacje</summary>
+        <p>
+          Web GUI i Android nie czytaja bazy bezposrednio. Korzystaja z endpointow API:
+          <code>/api/latest</code>, <code>/api/history</code>, <code>/api/events</code>, <code>/api/health</code>.
+          To upraszcza aplikacje klienckie i pozwala kontrolowac format danych w jednym miejscu.
+        </p>
+      </details>
+    </section>
+
+    <section id="runtime" data-layer="script backend ui uart database">
+      <h2>Uruchamianie i skrypty</h2>
+      <table>
+        <tr><th>Skrypt</th><th>Rola</th><th>Dlaczego jest potrzebny</th></tr>
+        <tr><td><code>run_server_stack.bat</code></td><td>Start MySQL + schema + backend + Web UI</td><td>Jedna komenda dla calego serwera bez aplikacji desktopowej.</td></tr>
+        <tr><td><code>run_full_stack.bat</code></td><td>Start backendu i Web UI</td><td>Uzywany przez stack po przygotowaniu bazy.</td></tr>
+        <tr><td><code>run_service.bat</code></td><td>Kompilacja i start <code>BmsApiServer</code></td><td>Oddziela API od Web UI.</td></tr>
+        <tr><td><code>run_web_ui.bat</code></td><td>Start statycznego serwera Web UI</td><td>Udostepnia <code>dashboard.html</code> na porcie 8088.</td></tr>
+        <tr><td><code>run_uart_sender.bat</code></td><td>Start odczytu UART</td><td>Uruchamia fizyczny port COM albo <code>SIMULATED</code>.</td></tr>
+        <tr><td><code>run_desktop_web_gui.bat</code></td><td>Start desktop viewer</td><td>Pokazuje Web GUI w oknie JavaFX.</td></tr>
+        <tr><td><code>stop_all.bat</code></td><td>Zatrzymanie portow projektu</td><td>Czysci listenery na portach 8090 i 8088.</td></tr>
+        <tr><td><code>load_env.bat</code></td><td>Wczytanie <code>.env</code></td><td>Jedno miejsce konfiguracji portow, bazy i UART.</td></tr>
+      </table>
+
+      <details>
+        <summary>Najbezpieczniejszy restart podczas debugowania</summary>
+        <pre><code>.\stop_all.bat
+taskkill /F /IM java.exe
+taskkill /F /IM javaw.exe
+.\run_server_stack.bat</code></pre>
+        <p>Ten zestaw usuwa stare procesy Java, ktore mogly trzymac port COM albo port HTTP.</p>
+      </details>
+    </section>
+
+    <section id="api" data-layer="backend ui android">
+      <h2>Endpointy API</h2>
+      <table>
+        <tr><th>Endpoint</th><th>Metoda</th><th>Handler</th><th>Opis</th></tr>
+        <tr><td><code>/api/health</code></td><td>GET</td><td><code>HealthHandler</code></td><td>Status backendu, bazy i widocznego BMS 1.</td></tr>
+        <tr><td><code>/api/ingest</code></td><td>POST</td><td><code>IngestHandler</code></td><td>Przyjmuje dane z UART sendera lub symulatora.</td></tr>
+        <tr><td><code>/api/latest</code></td><td>GET</td><td><code>LatestHandler</code></td><td>Ostatnia telemetria dla aplikacji.</td></tr>
+        <tr><td><code>/api/history</code></td><td>GET</td><td><code>HistoryHandler</code></td><td>Ostatnie zapisane probki, opcjonalnie po module i limicie.</td></tr>
+        <tr><td><code>/api/events</code></td><td>GET</td><td><code>EventHandler</code></td><td>Eventy systemowe i TinyBMS z pamieci/bazy.</td></tr>
+        <tr><td><code>/api/bms-events</code></td><td>POST</td><td><code>BmsEventsReadHandler</code></td><td>Czyta eventy bezposrednio z TinyBMS przez UART.</td></tr>
+        <tr><td><code>/api/statistics</code></td><td>GET</td><td><code>StatisticsHandler</code></td><td>Statystyki napiecia, pradu, SOC i statusu.</td></tr>
+        <tr><td><code>/api/bms-connection</code></td><td>GET</td><td><code>BmsConnectionHandler</code></td><td>Status komunikacji komputer - backend - BMS 1.</td></tr>
+        <tr><td><code>/api/cell-settings</code></td><td>GET/POST</td><td><code>CellSettingsHandler</code></td><td>Odczyt i zapis ustawien cel, z walidacja safe/expert.</td></tr>
+        <tr><td><code>/api/runtime-config</code></td><td>GET/POST</td><td><code>RuntimeConfigHandler</code></td><td>Lista portow COM i zapis <code>SERIAL_PORT</code> do <code>.env</code>.</td></tr>
+        <tr><td><code>/api/uart-control</code></td><td>GET/POST</td><td><code>UartControlHandler</code></td><td>Start/stop sendera UART z Web GUI.</td></tr>
+        <tr><td><code>/api/bms-control</code></td><td>POST</td><td><code>BmsControlHandler</code></td><td><code>Reset BMS</code>, <code>Clear Events</code>, <code>Clear Statistics</code>.</td></tr>
+      </table>
+    </section>
+
+    <section id="database" data-layer="database backend">
+      <h2>Baza danych</h2>
+      <table>
+        <tr><th>Tabela</th><th>Co przechowuje</th><th>Kto zapisuje</th></tr>
+        <tr><td><code>bms_readings</code></td><td>Glowna probka: napiecie, prad, SOC, status, raw line.</td><td><code>persistReading</code></td></tr>
+        <tr><td><code>bms_cell_readings</code></td><td>Napiecia pojedynczych cel dla konkretnej probki.</td><td><code>persistReading</code></td></tr>
+        <tr><td><code>bms_events</code></td><td>Eventy systemowe, eventy z UART i eventy tekstowe.</td><td><code>persistEvent</code></td></tr>
+        <tr><td><code>bms_ingest_sources</code></td><td>Status zrodel danych, licznik pakietow, ostatni payload.</td><td><code>persistIngestSource</code></td></tr>
+        <tr><td><code>bms_cell_settings</code></td><td>Ustawienia BMS zapisywane przez GUI/API.</td><td><code>persistSetting</code></td></tr>
+      </table>
+      <p class="warning">Backend normalizuje dane przed zapisem: napiecie moze byc przeliczone z mV, prad ma martwa strefe, a napiecie pakietu moze byc pogodzone z suma cel.</p>
+    </section>
+
+    <section id="protocol" data-layer="uart backend">
+      <h2>TinyBMS UART i CRC</h2>
+      <details open>
+        <summary>Komendy odczytu danych live</summary>
+        <table>
+          <tr><th>Komenda</th><th>Znaczenie</th><th>Parser</th></tr>
+          <tr><td><code>0x14</code></td><td>Napiecie pakietu jako float LE</td><td><code>readFloat</code></td></tr>
+          <tr><td><code>0x15</code></td><td>Prad jako float LE</td><td><code>readFloat</code> + <code>normalizeCurrent</code></td></tr>
+          <tr><td><code>0x18</code></td><td>Status jako UINT16 LE</td><td><code>readUInt16</code></td></tr>
+          <tr><td><code>0x1A</code></td><td>SOC jako UINT32 LE</td><td><code>readUInt32</code></td></tr>
+          <tr><td><code>0x1C</code></td><td>Napiecia cel, payload zmiennej dlugosci</td><td><code>readCellVoltages</code></td></tr>
+        </table>
+      </details>
+
+      <details>
+        <summary>Komendy obslugi eventow i resetu</summary>
+        <table>
+          <tr><th>Komenda</th><th>Znaczenie</th><th>Funkcja</th></tr>
+          <tr><td><code>AA 11 CRC</code></td><td>Najnowsze eventy TinyBMS</td><td><code>readNewestEvents</code></td></tr>
+          <tr><td><code>AA 12 CRC</code></td><td>Wszystkie eventy TinyBMS</td><td><code>readAllEvents</code></td></tr>
+          <tr><td><code>AA 02 01 CRC</code></td><td>Clear Events</td><td><code>clearEvents</code></td></tr>
+          <tr><td><code>AA 02 02 CRC</code></td><td>Clear Statistics</td><td><code>clearStatistics</code></td></tr>
+          <tr><td><code>AA 02 05 CRC</code></td><td>Reset BMS</td><td><code>resetBms</code></td></tr>
+        </table>
+      </details>
+
+      <details>
+        <summary>Dlaczego jest CRC?</summary>
+        <p>
+          UART nie gwarantuje, ze bajty dotra bez bledu. Funkcje <code>addCRC</code>/<code>addCrc</code>,
+          <code>crc16</code> i <code>hasValidCrc</code> licza CRC16 Modbus. Backend/sender ignoruje albo odrzuca ramki,
+          ktore nie maja poprawnego CRC, zeby nie pokazac fałszywych wartosci.
+        </p>
+      </details>
+    </section>
+
+    <section id="function-catalog" data-layer="backend uart ui android script database">
+      <h2>Katalog funkcji i klas</h2>
+      <p class="muted">
+        Ta sekcja tlumaczy funkcje uzyte w projekcie. Drobne funkcje pomocnicze sa opisane razem,
+        bo ich sens jest taki sam: walidacja, formatowanie, konwersja albo obsluga bledow.
+      </p>
+
+      <details open data-layer="backend">
+        <summary>BmsApiServer.java - backend HTTP, baza, normalizacja</summary>
+        <table>
+          <tr><th>Funkcja/klasa</th><th>Co robi</th><th>Dlaczego</th></tr>
+          <tr><td><code>main</code></td><td>Startuje backend, inicjuje baze, ustawienia, endpointy i hook zamykania.</td><td>Jedno wejscie dla procesu API.</td></tr>
+          <tr><td><code>initDatabase</code></td><td>Tworzy polaczenie i tabele, jesli ich nie ma.</td><td>Projekt moze wystartowac na czystej bazie.</td></tr>
+          <tr><td><code>startRetentionTask</code>, <code>purgeOldData</code>, <code>shutdownRetentionTask</code></td><td>Okresowo usuwa stare dane.</td><td>Baza nie rosnie bez konca.</td></tr>
+          <tr><td><code>initSettingsDefaults</code>, <code>loadSettingsFromDb</code>, <code>persistAllSettingsIfMissing</code>, <code>persistSetting</code></td><td>Obsluguje ustawienia BMS w pamieci i bazie.</td><td>GUI ma domyslne wartosci nawet przed pierwszym zapisem.</td></tr>
+          <tr><td><code>ingestLine</code></td><td>Rozpoznaje typ linii: BMS, EVENT, HEARTBEAT.</td><td>Jeden endpoint moze przyjmowac rozne typy danych.</td></tr>
+          <tr><td><code>parseBms</code></td><td>Parsuje linie telemetrii, normalizuje napiecie/prad/SOC/celle.</td><td>Chroni GUI i baze przed zlym formatem danych.</td></tr>
+          <tr><td><code>normalizeVoltage</code>, <code>reconcilePackVoltageWithCells</code></td><td>Przelicza V/mV i porownuje napiecie pakietu z suma cel.</td><td>Rzeczywisty BMS moze raportowac dane w roznych skalach.</td></tr>
+          <tr><td><code>normalizeCurrent</code></td><td>Przelicza prad i zeruje mala martwa strefe.</td><td>Nie pokazuje falszywego pradu, gdy BMS nie jest obciazony.</td></tr>
+          <tr><td><code>normalizeCellMv</code>, <code>updateDetectedSeriesCells</code></td><td>Filtruje nierealne cele i zapisuje wykryta liczbe cel.</td><td>GUI pokazuje faktycznie podlaczone cele.</td></tr>
+          <tr><td><code>parseEvent</code>, <code>fromTinyBmsEvent</code>, <code>tinyBmsEventName</code></td><td>Buduje eventy z tekstu albo TinyBMS UART.</td><td>Eventy sa czytelne w Web GUI.</td></tr>
+          <tr><td><code>persistReading</code>, <code>persistEvent</code>, <code>persistIngestSource</code></td><td>Zapisuje dane do tabel MySQL.</td><td>Dane zostaja po restarcie programu.</td></tr>
+          <tr><td><code>queryHistoryFromDb</code>, <code>queryStatisticsFromDb</code></td><td>Czyta historie i statystyki z bazy.</td><td>Wykresy i karty statystyk nie licza wszystkiego w przegladarce.</td></tr>
+          <tr><td><code>buildSystemEvents</code>, <code>systemEvent</code></td><td>Tworzy eventy o utracie bazy lub komunikacji.</td><td>Operator widzi problem bez patrzenia w terminal.</td></tr>
+          <tr><td><code>HealthHandler</code>, <code>IngestHandler</code>, <code>LatestHandler</code>, <code>HistoryHandler</code>, <code>EventHandler</code>, <code>StatisticsHandler</code>, <code>BmsConnectionHandler</code>, <code>CellSettingsHandler</code>, <code>RuntimeConfigHandler</code>, <code>UartControlHandler</code>, <code>BmsControlHandler</code>, <code>BmsEventsReadHandler</code></td><td>Klasy handlerow HTTP. Kazda odpowiada za jeden endpoint.</td><td>Logika API jest podzielona wedlug funkcji ekranu.</td></tr>
+          <tr><td><code>startUartProcess</code>, <code>stopUartProcess</code>, <code>releaseSerialPortForMaintenance</code>, <code>stopAllUartProcesses</code>, <code>stopProcessTree</code></td><td>Zarzadza procesem UART sendera.</td><td>Web GUI moze startowac/stopowac UART i zwalniac port przed resetem BMS.</td></tr>
+          <tr><td><code>listAvailableSerialPorts</code>, <code>isSupportedSerialPort</code></td><td>Buduje liste COM + SIMULATED i waliduje port.</td><td>Uzytkownik wybiera port z listy, bez zgadywania.</td></tr>
+          <tr><td><code>readBody</code>, <code>parseQuery</code>, <code>urlDecode</code>, <code>writeJson</code>, <code>escapeJson</code></td><td>Obsluga HTTP/formularzy/JSON.</td><td>Projekt nie uzywa frameworka, wiec te helpery zastepuja podstawy web frameworka.</td></tr>
+          <tr><td><code>safeInt</code>, <code>safeDouble</code>, <code>env</code>, <code>firstNonBlank</code>, <code>parseIntEnv</code>, <code>parseDoubleEnv</code></td><td>Bezpieczne czytanie liczb i zmiennych srodowiskowych.</td><td>Program nie powinien wywalac sie przez pusta lub zla konfiguracje.</td></tr>
+          <tr><td><code>BmsReading</code>, <code>BmsEvent</code>, <code>ModuleStats</code>, <code>SettingDefinition</code>, <code>IngestResult</code>, <code>IngestSourceState</code></td><td>Proste modele danych i metody <code>toJson</code>.</td><td>Trzymaja dane w pamieci i serializuja odpowiedzi API.</td></tr>
+        </table>
+      </details>
+
+      <details data-layer="uart">
+        <summary>BmsUartSender.java - odczyt fizycznego BMS i symulacja</summary>
+        <table>
+          <tr><th>Funkcja/klasa</th><th>Co robi</th><th>Dlaczego</th></tr>
+          <tr><td><code>BmsUartSender</code></td><td>Konstruktor czyta konfiguracje: port, baud, endpoint, tryb SIMULATED.</td><td>Proces sendera jest konfigurowalny z <code>.env</code> i argumentow.</td></tr>
+          <tr><td><code>start</code></td><td>Uruchamia port, heartbeat, polling i watchdog.</td><td>Sender ma dzialac stale w tle.</td></tr>
+          <tr><td><code>prepareNativeTempDirectory</code>, <code>cleanupOldJSerialCommFiles</code></td><td>Przygotowuje katalog dla natywnych plikow jSerialComm.</td><td>Zmniejsza problemy z blokadami DLL/temp.</td></tr>
+          <tr><td><code>initPort</code>, <code>resetConnectionState</code></td><td>Otwiera/zamyka COM albo aktywuje symulator.</td><td>Pozwala reconnectowac po utracie portu.</td></tr>
+          <tr><td><code>pollAndSend</code></td><td>Pobiera snapshot i wysyla go do backendu.</td><td>To glowna petla telemetrii.</td></tr>
+          <tr><td><code>sendHeartbeat</code></td><td>Wysyla <code>HEARTBEAT,1</code>.</td><td>Backend wie, ze zrodlo danych zyje.</td></tr>
+          <tr><td><code>buildSimulatedSnapshot</code>, <code>SimulatedPack</code></td><td>Tworzy realistyczne dane testowe.</td><td>Projekt dziala bez fizycznego BMS.</td></tr>
+          <tr><td><code>readSnapshot</code></td><td>Czyta voltage/current/SOC/status/celle z TinyBMS.</td><td>Jeden obiekt zawiera komplet danych live.</td></tr>
+          <tr><td><code>formatBmsLine</code></td><td>Buduje linie <code>BMS,1,...</code> z kropka dziesietna <code>Locale.US</code>.</td><td>Backend uzywa przecinka jako separatora CSV.</td></tr>
+          <tr><td><code>sendToServer</code></td><td>POST do <code>/api/ingest</code>.</td><td>Oddziela UART od backendu.</td></tr>
+          <tr><td><code>sendRaw</code>, <code>readFixedFrame</code>, <code>readHeader</code>, <code>readFullyWithTimeout</code>, <code>readByteUntil</code></td><td>Wysylanie i czytanie ramek UART z timeoutem.</td><td>Port COM moze milczec, wiec kod nie moze wisiec wiecznie.</td></tr>
+          <tr><td><code>readFloat</code>, <code>readUInt32</code>, <code>readUInt16</code>, <code>readCellVoltages</code></td><td>Parsery odpowiedzi TinyBMS.</td><td>Kazdy typ danych ma inny format bajtow.</td></tr>
+          <tr><td><code>normalizeCurrent</code>, <code>reconcileVoltageWithCells</code>, <code>normalizeCellMv</code></td><td>Korekta skali i odrzucanie nierealnych danych.</td><td>Chroni UI przed absurdalnymi wartosciami.</td></tr>
+          <tr><td><code>addCRC</code>, <code>crc16</code>, <code>hasValidCrc</code></td><td>CRC16 Modbus.</td><td>Walidacja ramek TinyBMS.</td></tr>
+          <tr><td><code>logFrame</code>, <code>env</code>, <code>safeInt</code>, <code>clamp</code>, <code>normalizePort</code>, <code>hasFlag</code></td><td>Debug i konfiguracja.</td><td>Ulatwia uruchamianie w roznych srodowiskach.</td></tr>
+        </table>
+      </details>
+
+      <details data-layer="uart">
+        <summary>TinyBmsUartSettingsService.java - ustawienia, reset, eventy TinyBMS</summary>
+        <table>
+          <tr><th>Funkcja/klasa</th><th>Co robi</th><th>Dlaczego</th></tr>
+          <tr><td><code>TinyBmsUartSettingsService</code></td><td>Otwiera COM do krotkiej komendy serwisowej.</td><td>Reset i zapis ustawien wymagaja bezposredniego UART.</td></tr>
+          <tr><td><code>supportsKey</code>, <code>supportedKeysSummary</code></td><td>Informuje, ktore ustawienia sa obslugiwane.</td><td>Backend moze odrzucic nieznane klucze.</td></tr>
+          <tr><td><code>writeSetting</code>, <code>sendWrite</code></td><td>Buduje i wysyla zapis rejestru TinyBMS.</td><td>Web GUI moze zmieniac limity BMS.</td></tr>
+          <tr><td><code>applySafeLiIonProfile</code></td><td>Ustawia bezpieczny profil Li-Ion.</td><td>Szybka konfiguracja bez recznego wpisywania wartosci.</td></tr>
+          <tr><td><code>resetBms</code>, <code>clearEvents</code>, <code>clearStatistics</code></td><td>Komendy serwisowe <code>AA 02 option CRC</code>.</td><td>Przyciski Web GUI musza mapowac sie na realny protokol TinyBMS.</td></tr>
+          <tr><td><code>readNewestEvents</code>, <code>readAllEvents</code>, <code>readEvents</code></td><td>Czyta eventy TinyBMS z komend 0x11 i 0x12.</td><td>Zakladka Events ma miec realne eventy z BMS, nie tylko systemowe.</td></tr>
+          <tr><td><code>sendPayloadRequest</code>, <code>readPayloadFrame</code>, <code>readFrame</code>, <code>readOne</code>, <code>drainInput</code></td><td>Warstwa ramki UART.</td><td>Obsluguje odpowiedzi stale i zmiennej dlugosci.</td></tr>
+          <tr><td><code>uint32Le</code>, <code>uint24Le</code></td><td>Konwersja timestampow eventow.</td><td>PDF TinyBMS uzywa nietypowego UINT24 dla event timestamp.</td></tr>
+          <tr><td><code>RegisterBinding</code>, <code>TinyBmsEvent</code></td><td>Modele rejestru i eventu.</td><td>Upraszczaja kod backendu.</td></tr>
+        </table>
+      </details>
+
+      <details data-layer="ui">
+        <summary>dashboard.js - Web GUI</summary>
+        <table>
+          <tr><th>Funkcja</th><th>Co robi</th><th>Dlaczego</th></tr>
+          <tr><td><code>initTabs</code></td><td>Przelacza zakladki.</td><td>Jedna strona HTML, kilka ekranow.</td></tr>
+          <tr><td><code>refreshHealth</code></td><td>Odswieza pasek statusu backendu i DB.</td><td>Uzytkownik od razu widzi, czy API dziala.</td></tr>
+          <tr><td><code>renderLive</code></td><td>Rysuje karte BMS 1 z napieciem, pradem, SOC i celami.</td><td>Najwazniejszy podglad live.</td></tr>
+          <tr><td><code>renderEvents</code>, <code>wireBmsEventControls</code>, <code>readBmsEvents</code></td><td>Pokazuje eventy i uruchamia odczyt eventow TinyBMS.</td><td>Operator moze pobrac eventy bez terminala.</td></tr>
+          <tr><td><code>renderStats</code>, <code>refreshStatistics</code>, <code>buildStatsFromHistory</code></td><td>Buduje statystyki z historii.</td><td>Wykresy maja miec szybki kontekst liczbowy.</td></tr>
+          <tr><td><code>buildSingleLineChart</code>, <code>buildMultiLineChart</code>, <code>linePoints</code>, <code>renderStatisticsCharts</code></td><td>Tworzy wykresy SVG bez bibliotek.</td><td>Brak zaleznosci z internetu i proste dzialanie offline.</td></tr>
+          <tr><td><code>renderBmsConnectionStatus</code>, <code>statusBadge</code></td><td>Pokazuje status komunikacji komputer - BMS.</td><td>Zastepuje dawna zakladke RPi.</td></tr>
+          <tr><td><code>renderSettings</code>, <code>wireSettingsForm</code>, <code>formatSettingValue</code></td><td>Pokazuje i zapisuje ustawienia BMS.</td><td>Bezpieczny panel konfiguracji.</td></tr>
+          <tr><td><code>renderRuntimeConfig</code>, <code>wireRuntimeConfigForm</code>, <code>refreshRuntimeConfig</code></td><td>Lista portow COM i zapis do <code>.env</code>.</td><td>Uzytkownik nie edytuje pliku recznie.</td></tr>
+          <tr><td><code>renderUartStatus</code>, <code>wireUartControls</code>, <code>refreshUartStatus</code></td><td>Start/stop UART i logi sendera.</td><td>Kontrola procesu z przegladarki.</td></tr>
+          <tr><td><code>wireBmsControls</code>, <code>sendControl</code></td><td>Reset/Clear Events/Clear Statistics.</td><td>Mapuje przyciski na API serwisowe.</td></tr>
+          <tr><td><code>escapeHtml</code>, <code>describeStatus</code>, <code>formatChartNumber</code>, <code>average</code>, <code>minOrZero</code>, <code>maxOrZero</code>, <code>sanitizeSampleLimit</code></td><td>Helpery UI.</td><td>Bezpieczne wyswietlanie i formatowanie.</td></tr>
+        </table>
+      </details>
+
+      <details data-layer="ui">
+        <summary>DesktopWebGuiApp.java i JavaFX GUI</summary>
+        <table>
+          <tr><th>Funkcja/klasa</th><th>Co robi</th><th>Dlaczego</th></tr>
+          <tr><td><code>DesktopWebGuiApp.start</code></td><td>Tworzy okno JavaFX z <code>WebView</code>.</td><td>Desktop viewer pokazuje to samo co Web GUI.</td></tr>
+          <tr><td><code>buildToolbar</code>, <code>buildStatusBar</code>, <code>buildButton</code></td><td>Buduje prosty pasek Home/Reload/Open in Browser.</td><td>Minimalny UI bez zbednych przyciskow.</td></tr>
+          <tr><td><code>openInSystemBrowser</code></td><td>Otwiera aktualny adres w domyslnej przegladarce.</td><td>Latwe przejscie z desktop viewera do browsera.</td></tr>
+          <tr><td><code>env</code>, <code>main</code></td><td>Czyta URL i startuje JavaFX.</td><td>Viewer mozna konfigurowac przez <code>.env</code>.</td></tr>
+          <tr><td><code>FXMLController</code></td><td>Starszy/alternatywny kontroler JavaFX GUI z live, eventami, ustawieniami i wykresami.</td><td>Zachowuje desktopowa aplikacje niezalezna od WebView.</td></tr>
+          <tr><td><code>MainGUI</code>, <code>Main</code></td><td>Entry pointy dla JavaFX/testow.</td><td>Utrzymuja kompatybilnosc z uruchamianiem z IDE.</td></tr>
+        </table>
+      </details>
+
+      <details data-layer="android">
+        <summary>Android - MainActivity.java i BmsChartView.java</summary>
+        <table>
+          <tr><th>Funkcja/klasa</th><th>Co robi</th><th>Dlaczego</th></tr>
+          <tr><td><code>MainActivity.onCreate</code></td><td>Podlacza layout, przyciski, wykresy i startuje pierwszy refresh.</td><td>Glowny start aplikacji mobilnej.</td></tr>
+          <tr><td><code>refreshRunnable</code>, <code>refreshData</code></td><td>Cyklicznie pobiera health/latest/history.</td><td>Telefon sam odswieza dane.</td></tr>
+          <tr><td><code>renderHealth</code></td><td>Pokazuje status backendu i DB.</td><td>Szybka diagnostyka polaczenia telefonu z PC.</td></tr>
+          <tr><td><code>renderLatest</code></td><td>Pokazuje aktualne napiecie, prad, SOC, status i liste cel.</td><td>Najwazniejsze dane na telefonie.</td></tr>
+          <tr><td><code>renderHistory</code></td><td>Rysuje wykresy voltage/current/SOC.</td><td>Mobilny podglad trendow bez wykresu cel.</td></tr>
+          <tr><td><code>fetchText</code></td><td>HTTP GET z timeoutem.</td><td>Prosty klient API bez dodatkowych bibliotek.</td></tr>
+          <tr><td><code>normalizedBaseUrl</code>, <code>loadBaseUrl</code>, <code>saveBaseUrl</code></td><td>Obsluga adresu komputera.</td><td>Telefon musi znac IP PC w Wi-Fi.</td></tr>
+          <tr><td><code>joinIntArray</code>, <code>readCellsArray</code></td><td>Helpery JSON.</td><td>Obsluguja format backendu <code>cellsMv</code> i stary alias <code>cellMv</code>.</td></tr>
+          <tr><td><code>BmsChartView.init</code>, <code>setTitle</code>, <code>setLineColor</code>, <code>setValues</code>, <code>onDraw</code></td><td>Wlasny prosty wykres Android Canvas.</td><td>Brak zewnetrznej biblioteki wykresow.</td></tr>
+        </table>
+      </details>
+
+      <details data-layer="backend script">
+        <summary>Pozostale klasy pomocnicze</summary>
+        <table>
+          <tr><th>Plik</th><th>Funkcje</th><th>Po co</th></tr>
+          <tr><td><code>BmsTestFeeder.java</code></td><td><code>main</code>, <code>post</code>, <code>SimulatedPack.nextLine</code>, <code>updateState</code>, <code>buildCells</code>, <code>clamp</code></td><td>Generator testowych danych BMS przez HTTP.</td></tr>
+          <tr><td><code>Controller.java</code></td><td>Forwarduje stdin do GUI/API.</td><td>Kompatybilnosc ze starszym przeplywem danych.</td></tr>
+          <tr><td><code>DataManager.java</code></td><td>Czyta linie stdin i POSTuje do API.</td><td>Prosty most tekstowy do backendu.</td></tr>
+          <tr><td><code>StaticWebUiServer.java</code></td><td>Serwuje <code>dashboard.html</code>, CSS i JS.</td><td>Nie potrzeba Pythona ani zewnetrznego webservera.</td></tr>
+        </table>
+      </details>
+    </section>
+
+    <section id="debugging" data-layer="backend uart ui android database script">
+      <h2>Debugowanie</h2>
+      <details open>
+        <summary>Backend nie odpowiada</summary>
+        <pre><code>curl.exe http://127.0.0.1:8090/api/health</code></pre>
+        <p>Jesli nie dziala, zrob mocny restart procesow Java i uruchom <code>run_server_stack.bat</code>.</p>
+      </details>
+
+      <details>
+        <summary>Port COM nie dziala</summary>
+        <pre><code>[System.IO.Ports.SerialPort]::GetPortNames()</code></pre>
+        <p>Sprawdz, czy wybrany port jest na liscie. Jesli nie masz BMS, wybierz <code>SIMULATED</code>.</p>
+      </details>
+
+      <details>
+        <summary>Android nie laczy sie z komputerem</summary>
+        <p>Telefon musi byc w tej samej sieci Wi-Fi. W aplikacji wpisz adres komputera, np. <code>http://192.168.31.70:8090</code>, nie <code>127.0.0.1</code>.</p>
+      </details>
+
+      <details>
+        <summary>MySQL/XAMPP nie startuje</summary>
+        <p>Sprawdz log XAMPP. Przy bledach InnoDB najpierw rob kopie <code>C:\xampp\mysql\data</code>, dopiero potem naprawiaj pliki logow.</p>
+      </details>
+    </section>
+
+    <section id="changes" data-layer="backend uart ui android database script">
+      <h2>Jak rozwijac projekt bez psucia calosci</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Dodajesz nowy odczyt TinyBMS?</h3>
+          <p>Dodaj komende w <code>BmsUartSender</code> albo <code>TinyBmsUartSettingsService</code>, sprawdz CRC i dopiero potem wystaw dane przez API.</p>
+        </div>
+        <div class="card">
+          <h3>Dodajesz pole do telemetrii?</h3>
+          <p>Zmien model <code>BmsReading</code>, zapis w bazie, JSON w API, Web GUI i Android. Inaczej klient nie zobaczy pola.</p>
+        </div>
+        <div class="card">
+          <h3>Dodajesz ustawienie BMS?</h3>
+          <p>Dodaj <code>SettingDefinition</code>, mapowanie rejestru w <code>TinyBmsUartSettingsService</code> i walidacje zakresu.</p>
+        </div>
+        <div class="card">
+          <h3>Zmiana w Androidzie?</h3>
+          <p>Buduj z JDK 17+ albo JDK 23: <code>gradlew.bat :app:compileDebugJavaWithJavac</code>.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+  const searchInput = document.getElementById("search");
+  const layerFilter = document.getElementById("layerFilter");
+  const expandAll = document.getElementById("expandAll");
+  const collapseAll = document.getElementById("collapseAll");
+
+  function normalize(text) {
+    return String(text || "").toLowerCase();
+  }
+
+  function matchesLayer(el, layer) {
+    if (layer === "all") return true;
+    const value = el.getAttribute("data-layer");
+    if (!value) return true;
+    return value.split(/\s+/).includes(layer);
+  }
+
+  function applyFilters() {
+    const query = normalize(searchInput.value);
+    const layer = layerFilter.value;
+    document.querySelectorAll("main section, main details, main .card").forEach((el) => {
+      const textOk = !query || normalize(el.textContent).includes(query);
+      const layerOk = matchesLayer(el, layer);
+      el.classList.toggle("hidden", !(textOk && layerOk));
+    });
+  }
+
+  searchInput.addEventListener("input", applyFilters);
+  layerFilter.addEventListener("change", applyFilters);
+
+  expandAll.addEventListener("click", () => {
+    document.querySelectorAll("details").forEach((details) => {
+      if (!details.classList.contains("hidden")) details.open = true;
+    });
+  });
+
+  collapseAll.addEventListener("click", () => {
+    document.querySelectorAll("details").forEach((details) => {
+      details.open = false;
+    });
+  });
+
+  document.querySelectorAll("aside a").forEach((link) => {
+    link.addEventListener("click", () => {
+      document.querySelectorAll("aside a").forEach((item) => item.classList.remove("active"));
+      link.classList.add("active");
+    });
+  });
+</script>
+</body>
+</html>
