@@ -199,7 +199,7 @@ public class MainActivity extends AppCompatActivity {
             modules.append("SOC: ").append(two.format(item.optDouble("socPercent"))).append(" %\n");
             modules.append("Status: ").append(item.optInt("statusCode")).append("\n\n");
 
-            JSONArray cellArray = item.optJSONArray("cellMv");
+            JSONArray cellArray = readCellsArray(item);
             if (cellArray != null && cellArray.length() > 0) {
                 cells.append("Module ").append(item.optInt("moduleId")).append(": ");
                 for (int c = 0; c < cellArray.length(); c++) {
@@ -232,7 +232,7 @@ public class MainActivity extends AppCompatActivity {
             voltage.add((float) item.optDouble("voltageV"));
             current.add((float) item.optDouble("currentA"));
             soc.add((float) item.optDouble("socPercent"));
-            JSONArray cells = item.optJSONArray("cellMv");
+            JSONArray cells = readCellsArray(item);
             if (cells != null && cells.length() > 0) {
                 float sum = 0;
                 for (int c = 0; c < cells.length(); c++) {
@@ -300,5 +300,13 @@ public class MainActivity extends AppCompatActivity {
             text.append(array.optInt(i));
         }
         return text.toString();
+    }
+
+    private JSONArray readCellsArray(JSONObject item) {
+        if (item == null) {
+            return null;
+        }
+        JSONArray cells = item.optJSONArray("cellsMv");
+        return cells != null ? cells : item.optJSONArray("cellMv");
     }
 }
