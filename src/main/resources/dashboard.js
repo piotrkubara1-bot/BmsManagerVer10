@@ -94,6 +94,62 @@ function renderEvents(events) {
 	`).join("");
 }
 
+function wireBmsEventControls() {
+	const newestBtn = document.getElementById("readNewestBmsEventsBtn");
+	const allBtn = document.getElementById("readAllBmsEventsBtn");
+	const statusEl = document.getElementById("bmsEventsReadStatus");
+	if (!newestBtn || !allBtn || !statusEl) {
+		return;
+	}
+
+	async function readBmsEvents(mode) {
+		const port = String(document.getElementById("serialPortValue")?.value || "").trim().toUpperCase();
+		if (!/^(COM\d+)$/.test(port)) {
+			statusEl.textContent = "Choose a real COM port first. SIMULATED cannot read BMS events.";
+			statusEl.style.color = "#ff6b6b";
+			return;
+		}
+		if (mode === "all" && !window.confirm("Read ALL events from TinyBMS? This may temporarily stop UART polling.")) {
+			return;
+		}
+
+		statusEl.textContent = "Reading BMS events...";
+		statusEl.style.color = "#ffd166";
+		newestBtn.disabled = true;
+		allBtn.disabled = true;
+		try {
+			const body = new URLSearchParams({ mode, serialPort: port }).toString();
+			const response = await fetch(`${API_BASE}/api/bms-events`, {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body
+			});
+			const json = await response.json();
+			if (!response.ok) {
+				statusEl.textContent = `BMS event read failed: ${json.error || response.status}`;
+				statusEl.style.color = "#ff6b6b";
+				return;
+			}
+			statusEl.textContent = json.message || `Read ${json.events?.length || 0} event(s).`;
+			statusEl.style.color = "#29d391";
+			await refreshData();
+		} catch (error) {
+			statusEl.textContent = "BMS event read failed: service unreachable";
+			statusEl.style.color = "#ff6b6b";
+		} finally {
+			newestBtn.disabled = false;
+			allBtn.disabled = false;
+		}
+	}
+
+	newestBtn.addEventListener("click", async () => {
+		await readBmsEvents("newest");
+	});
+	allBtn.addEventListener("click", async () => {
+		await readBmsEvents("all");
+	});
+}
+
 function renderStats(stats, moduleId) {
 	const container = document.getElementById("statsCards");
 	const sampleLabel = `Latest ${statsState.sampleLimit}`;
@@ -895,6 +951,7 @@ wireSettingsForm();
 wireRuntimeConfigForm();
 wireUartControls();
 wireBmsControls();
+wireBmsEventControls();
 wireStatisticsControls();
 refreshHealth();
 refreshData();

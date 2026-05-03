@@ -99,6 +99,7 @@ public class BmsApiServer {
 		server.createContext("/api/runtime-config", new RuntimeConfigHandler());
 		server.createContext("/api/uart-control", new UartControlHandler());
 		server.createContext("/api/bms-control", new BmsControlHandler());
+		server.createContext("/api/bms-events", new BmsEventsReadHandler());
 		server.setExecutor(null);
 
 		System.out.println("[BmsApiServer] Listening on port " + port);
@@ -1166,6 +1167,62 @@ public class BmsApiServer {
 		return event;
 	}
 
+	private static BmsEvent fromTinyBmsEvent(TinyBmsUartSettingsService.TinyBmsEvent bmsEvent, String sourceMode) {
+		BmsEvent event = new BmsEvent();
+		event.timestamp = Instant.now().toString();
+		event.moduleId = 1;
+		event.eventCode = bmsEvent.eventCode;
+		event.severity = severityForTinyBmsEvent(bmsEvent.eventCode);
+		event.message = tinyBmsEventName(bmsEvent.eventCode) +
+			" (BMS timestamp=" + bmsEvent.timestamp + ", base=" + bmsEvent.baseTimestamp + ")";
+		event.rawLine = "TINYBMS_EVENT," + sourceMode + "," + bmsEvent.baseTimestamp + "," + bmsEvent.timestamp + "," + bmsEvent.eventCode;
+		return event;
+	}
+
+	private static String severityForTinyBmsEvent(int eventCode) {
+		if (eventCode >= 0x01 && eventCode <= 0x0F) {
+			return "ERROR";
+		}
+		if (eventCode >= 0x20 && eventCode <= 0x25) {
+			return "WARN";
+		}
+		return "INFO";
+	}
+
+	private static String tinyBmsEventName(int eventCode) {
+		switch (eventCode) {
+			case 0x01: return "Cell undervoltage";
+			case 0x02: return "Cell overvoltage";
+			case 0x03: return "Pack undervoltage";
+			case 0x04: return "Pack overvoltage";
+			case 0x05: return "Charge overcurrent";
+			case 0x06: return "Discharge overcurrent";
+			case 0x07: return "Short circuit";
+			case 0x08: return "MOSFET overtemperature";
+			case 0x09: return "PCB overtemperature";
+			case 0x0A: return "Cell overtemperature";
+			case 0x0B: return "Cell undertemperature";
+			case 0x0C: return "Charge temperature high";
+			case 0x0D: return "Discharge temperature high";
+			case 0x0E: return "External sensor fault";
+			case 0x0F: return "Internal error";
+			case 0x20: return "Cell balancing warning";
+			case 0x21: return "High current warning";
+			case 0x22: return "High temperature warning";
+			case 0x23: return "Low temperature warning";
+			case 0x24: return "High voltage warning";
+			case 0x25: return "Low voltage warning";
+			case 0x30: return "BMS started";
+			case 0x31: return "Charging";
+			case 0x32: return "Fully charged";
+			case 0x33: return "Discharging";
+			case 0x34: return "Regeneration";
+			case 0x35: return "Idle";
+			case 0x36: return "Balancing";
+			default: return "TinyBMS event 0x" + String.format(Locale.ROOT, "%02X", eventCode);
+		}
+	}
+
 	private static boolean isDbConnectionAlive() {
 		Connection connection = dbConnection;
 		if (connection == null) {
@@ -1664,6 +1721,92 @@ public class BmsApiServer {
 			}
 
 			writeJson(exchange, 200, "{\"ok\":true,\"action\":\"" + escapeJson(action) + "\",\"serialPort\":\"" + escapeJson(serialPort) + "\",\"message\":\"" + escapeJson(message) + "\"}");
+		}
+	}
+
+	private static class BmsEventsReadHandler implements HttpHandler {
+		@Override
+		public void handle(HttpExchange exchange) throws IOException {
+			if (handleCorsAndPreflight(exchange)) {
+				return;
+			}
+			if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+				writeJson(exchange, 405, "{\"error\":\"Method not allowed\"}");
+				return;
+			}
+
+			Map<String, String> params = parseQuery(readBody(exchange.getRequestBody()));
+			String mode = firstNonBlank(params.get("mode"), "newest").trim().toLowerCase(Locale.ROOT);
+			String serialPort = firstNonBlank(params.get("serialPort"), params.get("port"), readConfigValue("SERIAL_PORT", "COM5")).trim().toUpperCase(Locale.ROOT);
+			if (!isSupportedSerialPort(serialPort)) {
+				writeJson(exchange, 400, "{\"error\":\"serialPort must look like COM3, COM5 or SIMULATED\"}");
+				return;
+			}
+			if ("SIMULATED".equals(serialPort)) {
+				writeJson(exchange, 400, "{\"error\":\"BMS event reads are unavailable in SIMULATED mode.\"}");
+				return;
+			}
+			if (!"newest".equals(mode) && !"all".equals(mode)) {
+				writeJson(exchange, 400, "{\"error\":\"mode must be newest or all\"}");
+				return;
+			}
+
+			boolean restartUart = releaseSerialPortForMaintenance(serialPort);
+			List<BmsEvent> imported = new ArrayList<>();
+			try (TinyBmsUartSettingsService uart = new TinyBmsUartSettingsService(serialPort, parseIntEnv("SERIAL_BAUD", 115200))) {
+				List<TinyBmsUartSettingsService.TinyBmsEvent> bmsEvents;
+				if ("all".equals(mode)) {
+					bmsEvents = uart.readAllEvents();
+				} else {
+					bmsEvents = uart.readNewestEvents();
+				}
+
+				for (TinyBmsUartSettingsService.TinyBmsEvent bmsEvent : bmsEvents) {
+					BmsEvent event = fromTinyBmsEvent(bmsEvent, mode);
+					imported.add(event);
+					synchronized (LOCK) {
+						events.addFirst(event);
+						while (events.size() > MAX_EVENTS) {
+							events.removeLast();
+						}
+					}
+					persistEvent(event);
+				}
+			} catch (Exception ex) {
+				if (restartUart) {
+					try {
+						startUartProcess(serialPort);
+					} catch (Exception restartEx) {
+						appendUartLog("[UART] Failed to restart sender after BMS event read: " + restartEx.getMessage());
+					}
+				}
+				writeJson(exchange, 500, "{\"error\":\"" + escapeJson(ex.getMessage()) + "\"}");
+				return;
+			}
+
+			String message = "Read " + imported.size() + " BMS event(s).";
+			if (restartUart) {
+				try {
+					startUartProcess(serialPort);
+					message += " UART sender restarted.";
+				} catch (Exception restartEx) {
+					message += " UART sender restart failed: " + restartEx.getMessage();
+				}
+			}
+
+			StringBuilder json = new StringBuilder();
+			json.append("{\"ok\":true,\"mode\":\"").append(escapeJson(mode)).append("\",")
+				.append("\"serialPort\":\"").append(escapeJson(serialPort)).append("\",")
+				.append("\"message\":\"").append(escapeJson(message)).append("\",")
+				.append("\"events\":[");
+			for (int i = 0; i < imported.size(); i++) {
+				if (i > 0) {
+					json.append(',');
+				}
+				json.append(imported.get(i).toJson());
+			}
+			json.append("]}");
+			writeJson(exchange, 200, json.toString());
 		}
 	}
 

@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 public class TinyBmsUartSettingsService implements AutoCloseable {
@@ -94,6 +96,14 @@ public class TinyBmsUartSettingsService implements AutoCloseable {
         sendMaintenanceCommand(OPTION_CLEAR_STATISTICS, false);
     }
 
+    public List<TinyBmsEvent> readNewestEvents() throws IOException {
+        return readEvents(0x11);
+    }
+
+    public List<TinyBmsEvent> readAllEvents() throws IOException {
+        return readEvents(0x12);
+    }
+
     public String lastResponseHex() {
         return toHex(lastResponse);
     }
@@ -114,6 +124,45 @@ public class TinyBmsUartSettingsService implements AutoCloseable {
 
     private void sendWrite(byte[] data) throws IOException {
         sendRequest(data, 128, 800L, -1);
+    }
+
+    private List<TinyBmsEvent> readEvents(int command) throws IOException {
+        byte[] response = sendPayloadRequest(new byte[]{(byte) 0xAA, (byte) command}, command, 2048, 2000L);
+        if (response == null || response.length < 9) {
+            return new ArrayList<>();
+        }
+
+        int payloadLen = response[2] & 0xFF;
+        if (payloadLen < 4) {
+            return new ArrayList<>();
+        }
+
+        int payloadOffset = 3;
+        long baseTimestamp = uint32Le(response, payloadOffset);
+        int eventCount = (payloadLen - 4) / 4;
+        List<TinyBmsEvent> result = new ArrayList<>();
+        for (int i = 0; i < eventCount; i++) {
+            int offset = payloadOffset + 4 + (i * 4);
+            if (offset + 3 >= response.length - 2) {
+                break;
+            }
+            long timestamp = uint24Le(response, offset);
+            int eventCode = response[offset + 3] & 0xFF;
+            result.add(new TinyBmsEvent(baseTimestamp, timestamp, eventCode));
+        }
+        return result;
+    }
+
+    private byte[] sendPayloadRequest(byte[] data, int expectedCommand, int maxResponseBytes, long timeoutMillis) throws IOException {
+        lastResponse = new byte[0];
+        drainInput();
+        byte[] packet = addCrc(data);
+        output.write(packet);
+        output.flush();
+
+        byte[] response = readPayloadFrame(expectedCommand, maxResponseBytes, timeoutMillis);
+        lastResponse = response == null ? new byte[0] : response;
+        return response;
     }
 
     private byte[] sendRequest(byte[] data, int maxResponseBytes, long timeoutMillis, int expectedCommand) throws IOException {
@@ -186,6 +235,68 @@ public class TinyBmsUartSettingsService implements AutoCloseable {
             byte[] frame = Arrays.copyOf(response, offset);
             if (frame.length >= 5 && !hasValidCrc(frame)) {
                 throw new IOException("Invalid TinyBMS response CRC: " + toHex(frame));
+            }
+            return frame;
+        }
+        return null;
+    }
+
+    private byte[] readPayloadFrame(int expectedCommand, int maxResponseBytes, long timeoutMillis) throws IOException {
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        while (System.currentTimeMillis() < deadline) {
+            int first = readOne(deadline);
+            if (first < 0) {
+                return null;
+            }
+            if (first != 0xAA) {
+                continue;
+            }
+
+            int commandOrError = readOne(deadline);
+            if (commandOrError < 0) {
+                return null;
+            }
+
+            if (commandOrError == 0x00) {
+                int command = readOne(deadline);
+                int error = readOne(deadline);
+                int crcL = readOne(deadline);
+                int crcH = readOne(deadline);
+                byte[] frame = new byte[] {
+                    (byte) 0xAA, 0x00, (byte) command, (byte) error, (byte) crcL, (byte) crcH
+                };
+                if (!hasValidCrc(frame)) {
+                    throw new IOException("Invalid TinyBMS error response CRC: " + toHex(frame));
+                }
+                throw new IOException("TinyBMS returned error " + error + " for command 0x" + String.format("%02X", command));
+            }
+
+            if (commandOrError != expectedCommand) {
+                continue;
+            }
+
+            int payloadLen = readOne(deadline);
+            if (payloadLen < 0) {
+                return null;
+            }
+            int totalLength = 3 + payloadLen + 2;
+            if (totalLength > maxResponseBytes) {
+                throw new IOException("TinyBMS response too large: " + totalLength + " bytes.");
+            }
+
+            byte[] frame = new byte[totalLength];
+            frame[0] = (byte) first;
+            frame[1] = (byte) commandOrError;
+            frame[2] = (byte) payloadLen;
+            for (int i = 3; i < totalLength; i++) {
+                int value = readOne(deadline);
+                if (value < 0) {
+                    return null;
+                }
+                frame[i] = (byte) value;
+            }
+            if (!hasValidCrc(frame)) {
+                throw new IOException("Invalid TinyBMS payload response CRC: " + toHex(frame));
             }
             return frame;
         }
@@ -267,6 +378,19 @@ public class TinyBmsUartSettingsService implements AutoCloseable {
         return builder.toString();
     }
 
+    private static long uint32Le(byte[] data, int offset) {
+        return ((long) data[offset] & 0xFF)
+            | (((long) data[offset + 1] & 0xFF) << 8)
+            | (((long) data[offset + 2] & 0xFF) << 16)
+            | (((long) data[offset + 3] & 0xFF) << 24);
+    }
+
+    private static long uint24Le(byte[] data, int offset) {
+        return ((long) data[offset] & 0xFF)
+            | (((long) data[offset + 1] & 0xFF) << 8)
+            | (((long) data[offset + 2] & 0xFF) << 16);
+    }
+
     @Override
     public void close() {
         try {
@@ -292,6 +416,18 @@ public class TinyBmsUartSettingsService implements AutoCloseable {
         RegisterBinding(int register, double scaleFactor) {
             this.register = register;
             this.scaleFactor = scaleFactor;
+        }
+    }
+
+    public static final class TinyBmsEvent {
+        public final long baseTimestamp;
+        public final long timestamp;
+        public final int eventCode;
+
+        TinyBmsEvent(long baseTimestamp, long timestamp, int eventCode) {
+            this.baseTimestamp = baseTimestamp;
+            this.timestamp = timestamp;
+            this.eventCode = eventCode;
         }
     }
 }
