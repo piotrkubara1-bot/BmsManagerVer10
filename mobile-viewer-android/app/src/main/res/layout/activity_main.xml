@@ -1,76 +1,159 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="16dp">
+    android:background="@drawable/mobile_dashboard_bg"
+    android:fillViewport="true">
 
-    <TextView
-        android:id="@+id/titleText"
-        android:layout_width="0dp"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="BMS Mobile Viewer"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <EditText
-        android:id="@+id/baseUrlInput"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:hint="http://192.168.1.100:8090"
-        android:inputType="textUri"
-        app:layout_constraintEnd_toStartOf="@+id/saveButton"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/titleText"
-        android:layout_marginTop="16dp" />
-
-    <Button
-        android:id="@+id/saveButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Save"
-        app:layout_constraintBottom_toBottomOf="@id/baseUrlInput"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/baseUrlInput"
-        app:layout_constraintTop_toTopOf="@id/baseUrlInput" />
-
-    <Button
-        android:id="@+id/refreshButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Refresh"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/baseUrlInput"
-        android:layout_marginTop="12dp" />
-
-    <TextView
-        android:id="@+id/statusText"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="Loading..."
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/refreshButton"
-        android:layout_marginTop="16dp" />
-
-    <ScrollView
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/statusText"
-        android:layout_marginTop="12dp">
+        android:orientation="vertical"
+        android:padding="18dp">
 
         <TextView
-            android:id="@+id/latestText"
+            android:id="@+id/titleText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="No data yet."
-            android:textSize="16sp" />
-    </ScrollView>
+            android:text="BMS Mobile"
+            android:textColor="#F6FAFF"
+            android:textSize="30sp"
+            android:textStyle="bold" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Live battery telemetry from your PC backend"
+            android:textColor="#9DB2CF"
+            android:textSize="14sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:background="@drawable/mobile_card_bg"
+            android:orientation="vertical"
+            android:padding="14dp">
+
+            <EditText
+                android:id="@+id/baseUrlInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="http://192.168.31.70:8090"
+                android:inputType="textUri"
+                android:singleLine="true"
+                android:textColor="#F6FAFF"
+                android:textColorHint="#7D90AA" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/saveButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Save" />
+
+                <Button
+                    android:id="@+id/refreshButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:text="Refresh" />
+
+                <Button
+                    android:id="@+id/autoRefreshButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:text="Auto: ON" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/mobile_status_bg"
+            android:padding="12dp"
+            android:text="Loading..."
+            android:textColor="#DCE7F7"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/lastUpdateText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Waiting for refresh..."
+            android:textColor="#8FA3BF"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/moduleCardsText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/mobile_card_bg"
+            android:fontFamily="monospace"
+            android:padding="16dp"
+            android:text="No telemetry yet."
+            android:textColor="#F6FAFF"
+            android:textSize="17sp" />
+
+        <com.piotrek.bmsmobileviewer.BmsChartView
+            android:id="@+id/voltageChart"
+            android:layout_width="match_parent"
+            android:layout_height="190dp"
+            android:layout_marginTop="14dp" />
+
+        <com.piotrek.bmsmobileviewer.BmsChartView
+            android:id="@+id/currentChart"
+            android:layout_width="match_parent"
+            android:layout_height="190dp"
+            android:layout_marginTop="14dp" />
+
+        <com.piotrek.bmsmobileviewer.BmsChartView
+            android:id="@+id/socChart"
+            android:layout_width="match_parent"
+            android:layout_height="190dp"
+            android:layout_marginTop="14dp" />
+
+        <com.piotrek.bmsmobileviewer.BmsChartView
+            android:id="@+id/cellsChart"
+            android:layout_width="match_parent"
+            android:layout_height="190dp"
+            android:layout_marginTop="14dp" />
+
+        <TextView
+            android:id="@+id/cellsText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/mobile_card_bg"
+            android:padding="16dp"
+            android:text="No cell data yet."
+            android:textColor="#CFE0F7"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/rawText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/mobile_card_bg"
+            android:fontFamily="monospace"
+            android:padding="16dp"
+            android:text=""
+            android:textColor="#8FA3BF"
+            android:textSize="12sp" />
+    </LinearLayout>
+</ScrollView>
