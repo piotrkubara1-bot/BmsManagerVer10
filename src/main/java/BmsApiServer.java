@@ -521,7 +521,9 @@ public class BmsApiServer {
 		if (!Double.isFinite(rawCurrent)) {
 			return 0.0;
 		}
-		return Math.abs(rawCurrent) > 200.0 ? rawCurrent / 1000.0 : rawCurrent;
+		double amps = Math.abs(rawCurrent) > 200.0 ? rawCurrent / 1000.0 : rawCurrent;
+		double deadband = parseDoubleEnv("BMS_CURRENT_ZERO_DEADBAND_A", 0.50);
+		return Math.abs(amps) < deadband ? 0.0 : amps;
 	}
 
 	private static int normalizeCellMv(int rawCellMv) {
@@ -2062,6 +2064,18 @@ public class BmsApiServer {
 
 	private static int parseIntEnv(String name, int fallback) {
 		return safeInt(System.getenv(name), fallback);
+	}
+
+	private static double parseDoubleEnv(String name, double fallback) {
+		String value = System.getenv(name);
+		if (value == null || value.trim().isEmpty()) {
+			return fallback;
+		}
+		try {
+			return Double.parseDouble(value.trim());
+		} catch (Exception ignored) {
+			return fallback;
+		}
 	}
 
 	private static boolean isSupportedSerialPort(String value) {

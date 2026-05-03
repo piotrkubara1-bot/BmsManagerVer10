@@ -34,8 +34,10 @@ public class BmsUartSender {
     private final int moduleId;
     private final String ingestUrl;
     private final int pollIntervalMs;
+    private final float currentZeroDeadbandA;
     private final boolean simulatorMode;
     private final boolean requireInitialConnection;
+    private final boolean debugFrames;
     private final Random simulatorRandom = new Random();
 
     private SerialPort port;
@@ -51,8 +53,10 @@ public class BmsUartSender {
         this.moduleId = Integer.parseInt(env("DEFAULT_MODULE_ID", "1"));
         this.ingestUrl = env("BMS_API_INGEST_URL", "http://127.0.0.1:8090/api/ingest");
         this.pollIntervalMs = Integer.parseInt(env("TINYBMS_POLL_INTERVAL_MS", "2000"));
+        this.currentZeroDeadbandA = Float.parseFloat(env("BMS_CURRENT_ZERO_DEADBAND_A", "0.50"));
         this.simulatorMode = "SIMULATED".equalsIgnoreCase(portName);
         this.requireInitialConnection = hasFlag(args, "--require-open");
+        this.debugFrames = "1".equals(env("TINYBMS_DEBUG_FRAMES", "0"));
     }
 
     public void start() {
@@ -234,6 +238,7 @@ public class BmsUartSender {
 
         List<Integer> cells = readCellVoltages();
         if (cells == null) return null;
+        voltage = reconcileVoltageWithCells(voltage, cells);
 
         return new TinyBmsSnapshot(voltage, current, socRaw, status, cells);
     }
@@ -291,6 +296,7 @@ public class BmsUartSender {
         byte[] pkt = addCRC(data);
         out.write(pkt);
         out.flush();
+        logFrame("TX", pkt);
 
         return readFixedFrame(data[1] & 0xFF, expectedLen, FRAME_TIMEOUT_MS);
     }
@@ -320,6 +326,7 @@ public class BmsUartSender {
         byte[] cmd = addCRC(new byte[]{(byte) 0xAA, 0x1C});
         out.write(cmd);
         out.flush();
+        logFrame("TX", cmd);
 
         byte[] header = readHeader(0x1C, FRAME_TIMEOUT_MS);
         if (header == null) return null;
@@ -331,6 +338,17 @@ public class BmsUartSender {
 
         byte[] body = new byte[payloadLen + 2];
         if (!readFullyWithTimeout(body, 0, body.length, FRAME_TIMEOUT_MS)) return null;
+
+        byte[] frame = new byte[3 + body.length];
+        frame[0] = header[0];
+        frame[1] = header[1];
+        frame[2] = header[2];
+        System.arraycopy(body, 0, frame, 3, body.length);
+        logFrame("RX", frame);
+        if (!hasValidCrc(frame)) {
+            System.err.println("[BmsUartSender] Ignoring cell voltage frame with invalid CRC");
+            return null;
+        }
 
         int cellCount = payloadLen / 2;
         List<Integer> cells = new ArrayList<>();
@@ -355,6 +373,11 @@ public class BmsUartSender {
         frame[1] = header[1];
         int remaining = expectedLen - 2;
         if (!readFullyWithTimeout(frame, 2, remaining, timeoutMs)) {
+            return null;
+        }
+        logFrame("RX", frame);
+        if (!hasValidCrc(frame)) {
+            System.err.println("[BmsUartSender] Ignoring command 0x" + String.format("%02X", expectedCommand) + " frame with invalid CRC");
             return null;
         }
         return frame;
@@ -439,7 +462,28 @@ public class BmsUartSender {
         if (!Float.isFinite(raw)) {
             return 0.0f;
         }
-        return Math.abs(raw) > 200.0f ? raw / 1000.0f : raw;
+        float amps = Math.abs(raw) > 200.0f ? raw / 1000.0f : raw;
+        return Math.abs(amps) < currentZeroDeadbandA ? 0.0f : amps;
+    }
+
+    private float reconcileVoltageWithCells(float packVoltage, List<Integer> cells) {
+        if (cells == null || cells.isEmpty()) {
+            return packVoltage;
+        }
+        int sumMv = 0;
+        for (Integer cellMv : cells) {
+            if (cellMv != null && cellMv > 0) {
+                sumMv += cellMv;
+            }
+        }
+        if (sumMv <= 0) {
+            return packVoltage;
+        }
+        float cellSumVoltage = sumMv / 1000.0f;
+        if (!Float.isFinite(packVoltage) || packVoltage <= 0.0f) {
+            return cellSumVoltage;
+        }
+        return Math.abs(cellSumVoltage - packVoltage) >= 0.20f ? cellSumVoltage : packVoltage;
     }
 
     private int normalizeCellMv(int raw) {
@@ -463,6 +507,40 @@ public class BmsUartSender {
         o[o.length - 2] = (byte) (crc & 0xFF);
         o[o.length - 1] = (byte) (crc >> 8);
         return o;
+    }
+
+    private boolean hasValidCrc(byte[] frame) {
+        if (frame == null || frame.length < 4) {
+            return false;
+        }
+        int expected = ((frame[frame.length - 1] & 0xFF) << 8) | (frame[frame.length - 2] & 0xFF);
+        int actual = crc16(frame, frame.length - 2);
+        return expected == actual;
+    }
+
+    private int crc16(byte[] data, int length) {
+        int crc = 0xFFFF;
+        for (int i = 0; i < length; i++) {
+            crc ^= data[i] & 0xFF;
+            for (int bit = 0; bit < 8; bit++) {
+                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xA001 : crc >> 1;
+            }
+        }
+        return crc & 0xFFFF;
+    }
+
+    private void logFrame(String direction, byte[] frame) {
+        if (!debugFrames || frame == null) {
+            return;
+        }
+        StringBuilder builder = new StringBuilder();
+        for (byte value : frame) {
+            if (builder.length() > 0) {
+                builder.append(' ');
+            }
+            builder.append(String.format("%02X", value & 0xFF));
+        }
+        System.out.println("[BmsUartSender] " + direction + " " + builder);
     }
 
     private String env(String key, String fallback) {

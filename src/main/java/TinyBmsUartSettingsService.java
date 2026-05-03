@@ -183,7 +183,11 @@ public class TinyBmsUartSettingsService implements AutoCloseable {
                 }
                 response[offset++] = (byte) next;
             }
-            return Arrays.copyOf(response, offset);
+            byte[] frame = Arrays.copyOf(response, offset);
+            if (frame.length >= 5 && !hasValidCrc(frame)) {
+                throw new IOException("Invalid TinyBMS response CRC: " + toHex(frame));
+            }
+            return frame;
         }
         return null;
     }
@@ -221,18 +225,32 @@ public class TinyBmsUartSettingsService implements AutoCloseable {
     }
 
     private static byte[] addCrc(byte[] data) {
-        int crc = 0xFFFF;
-        for (byte b : data) {
-            crc ^= b & 0xFF;
-            for (int i = 0; i < 8; i++) {
-                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xA001 : crc >> 1;
-            }
-        }
+        int crc = crc16(data, data.length);
 
         byte[] output = Arrays.copyOf(data, data.length + 2);
         output[output.length - 2] = (byte) (crc & 0xFF);
         output[output.length - 1] = (byte) ((crc >> 8) & 0xFF);
         return output;
+    }
+
+    private static boolean hasValidCrc(byte[] frame) {
+        if (frame == null || frame.length < 4) {
+            return false;
+        }
+        int expected = ((frame[frame.length - 1] & 0xFF) << 8) | (frame[frame.length - 2] & 0xFF);
+        int actual = crc16(frame, frame.length - 2);
+        return expected == actual;
+    }
+
+    private static int crc16(byte[] data, int length) {
+        int crc = 0xFFFF;
+        for (int i = 0; i < length; i++) {
+            crc ^= data[i] & 0xFF;
+            for (int bit = 0; bit < 8; bit++) {
+                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xA001 : crc >> 1;
+            }
+        }
+        return crc & 0xFFFF;
     }
 
     private static String toHex(byte[] data) {
