@@ -17,7 +17,6 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.web.WebEngine;
-import javafx.scene.web.WebHistory;
 import javafx.scene.web.WebView;
 import javafx.stage.Stage;
 
@@ -41,12 +40,8 @@ public class DesktopWebGuiApp extends Application {
         statusLabel.setTextFill(Color.web("#d7e2ef"));
 
         Button homeButton = buildButton("Home");
-        Button backButton = buildButton("Back");
-        Button forwardButton = buildButton("Forward");
         Button reloadButton = buildButton("Reload");
         Button browserButton = buildButton("Open in Browser");
-        Button restartButton = buildButton("Restart Connection");
-        Button closeButton = buildDangerButton("Close");
 
         ProgressIndicator spinner = new ProgressIndicator();
         spinner.setMaxSize(54, 54);
@@ -75,7 +70,7 @@ public class DesktopWebGuiApp extends Application {
         BorderPane root = new BorderPane();
         root.setStyle("-fx-background-color: #1f2a37;");
         root.setCenter(centerPane);
-        root.setTop(buildToolbar(homeButton, backButton, forwardButton, reloadButton, browserButton, restartButton, closeButton, addressField));
+        root.setTop(buildToolbar(homeButton, reloadButton, browserButton, addressField));
         root.setBottom(buildStatusBar(statusLabel));
 
         Scene scene = new Scene(root, 1360, 860);
@@ -105,14 +100,7 @@ public class DesktopWebGuiApp extends Application {
             loadRequestedUrl.run();
         });
         reloadButton.setOnAction(event -> engine.reload());
-        restartButton.setOnAction(event -> {
-            engine.load("about:blank");
-            Platform.runLater(loadRequestedUrl);
-        });
         browserButton.setOnAction(event -> openInSystemBrowser(addressField.getText(), statusLabel));
-        closeButton.setOnAction(event -> Platform.exit());
-        backButton.setOnAction(event -> navigateHistory(engine, -1));
-        forwardButton.setOnAction(event -> navigateHistory(engine, 1));
         scene.setOnKeyPressed(event -> {
             if (event.getCode() == KeyCode.ESCAPE) {
                 stage.setFullScreen(false);
@@ -151,11 +139,11 @@ public class DesktopWebGuiApp extends Application {
         loadRequestedUrl.run();
     }
 
-    private static HBox buildToolbar(Button homeButton, Button backButton, Button forwardButton, Button reloadButton, Button browserButton, Button restartButton, Button closeButton, TextField addressField) {
+    private static HBox buildToolbar(Button homeButton, Button reloadButton, Button browserButton, TextField addressField) {
         Label title = new Label("Desktop Web GUI");
         title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: white;");
 
-        HBox toolbar = new HBox(10, title, homeButton, backButton, forwardButton, reloadButton, browserButton, restartButton, addressField, closeButton);
+        HBox toolbar = new HBox(10, title, homeButton, reloadButton, browserButton, addressField);
         toolbar.setAlignment(Pos.CENTER_LEFT);
         toolbar.setPadding(new Insets(14, 16, 12, 16));
         toolbar.setStyle("-fx-background-color: linear-gradient(to right, #14202d, #223448);");
@@ -180,26 +168,6 @@ public class DesktopWebGuiApp extends Application {
             "-fx-padding: 8 14 8 14;"
         );
         return button;
-    }
-
-    private static Button buildDangerButton(String text) {
-        Button button = new Button(text);
-        button.setStyle(
-            "-fx-background-color: #d64242;" +
-            "-fx-text-fill: white;" +
-            "-fx-font-weight: bold;" +
-            "-fx-background-radius: 8;" +
-            "-fx-padding: 8 14 8 14;"
-        );
-        return button;
-    }
-
-    private static void navigateHistory(WebEngine engine, int offset) {
-        WebHistory history = engine.getHistory();
-        int targetIndex = history.getCurrentIndex() + offset;
-        if (targetIndex >= 0 && targetIndex < history.getEntries().size()) {
-            history.go(offset);
-        }
     }
 
     private static void openInSystemBrowser(String url, Label statusLabel) {
