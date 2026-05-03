@@ -17,7 +17,7 @@
 		<button class="tab active" data-tab="live">Live Data</button>
 		<button class="tab" data-tab="events">Events</button>
 		<button class="tab" data-tab="statistics">Statistics</button>
-		<button class="tab" data-tab="rpi-status">RPi Status</button>
+		<button class="tab" data-tab="bms-connection">BMS Connection</button>
 		<button class="tab" data-tab="cell-settings">Cell Settings</button>
 	</nav>
 
@@ -49,12 +49,9 @@
 		<section id="tab-statistics" class="tab-content">
 			<div class="stats-toolbar">
 				<label>
-					Module
+					BMS
 					<select id="statsModuleFilter">
 						<option value="1">1</option>
-						<option value="2">2</option>
-						<option value="3">3</option>
-						<option value="4">4</option>
 					</select>
 				</label>
 				<label>
@@ -74,34 +71,33 @@
 			<div class="stats-charts" id="statsCharts"></div>
 		</section>
 
-		<section id="tab-rpi-status" class="tab-content">
-			<div class="status-summary" id="rpiStatusSummary">Loading RPi status...</div>
-			<h3>Ingest Sources</h3>
+		<section id="tab-bms-connection" class="tab-content">
+			<div class="status-summary" id="bmsConnectionSummary">Loading BMS connection status...</div>
+			<h3>Computer to Backend</h3>
 			<table>
 				<thead>
 				<tr>
 					<th>Source</th>
 					<th>Last Seen</th>
 					<th>Seconds Ago</th>
-					<th>Online</th>
-					<th>Accepted</th>
-					<th>Last Module</th>
+					<th>Status</th>
+					<th>Accepted Packets</th>
 				</tr>
 				</thead>
-				<tbody id="rpiSourcesTableBody"></tbody>
+				<tbody id="bmsConnectionSourcesTableBody"></tbody>
 			</table>
 
-			<h3>Modules Freshness</h3>
+			<h3>Single BMS Telemetry</h3>
 			<table>
 				<thead>
 				<tr>
-					<th>Module</th>
-					<th>Last Seen</th>
+					<th>BMS</th>
+					<th>Last Telemetry</th>
 					<th>Seconds Ago</th>
-					<th>Online</th>
+					<th>Status</th>
 				</tr>
 				</thead>
-				<tbody id="rpiModulesTableBody"></tbody>
+				<tbody id="bmsConnectionDeviceTableBody"></tbody>
 			</table>
 		</section>
 
@@ -140,12 +136,9 @@
 			</div>
 			<form id="settingsForm" class="settings-form">
 				<label>
-					Module
+					BMS
 					<select id="settingsModule">
 						<option value="1">1</option>
-						<option value="2">2</option>
-						<option value="3">3</option>
-						<option value="4">4</option>
 					</select>
 				</label>
 				<label>
@@ -164,10 +157,7 @@
 				<tr>
 					<th>Parameter</th>
 					<th>Unit</th>
-					<th>Module 1</th>
-					<th>Module 2</th>
-					<th>Module 3</th>
-					<th>Module 4</th>
+					<th>BMS 1</th>
 				</tr>
 				</thead>
 				<tbody id="settingsTableBody"></tbody>

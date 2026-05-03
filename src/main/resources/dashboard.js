@@ -40,11 +40,8 @@ async function refreshHealth() {
 		const response = await fetch(`${API_BASE}/api/health`);
 		const json = await response.json();
 		const dbState = json.dbConnected ? "DB OK" : "DB OFF";
-		const modules = (json.modulesSeen || []).join(", ") || "none";
-		const allowed = Array.isArray(json.allowedModules) && json.allowedModules.length
-			? json.allowedModules.join(",")
-			: "all";
-		el.textContent = `Service: ${json.status.toUpperCase()} | ${dbState} | Modules: ${modules} | Allowed: ${allowed}`;
+		const bmsSeen = Array.isArray(json.modulesSeen) && json.modulesSeen.includes(1) ? "BMS 1 seen" : "no BMS telemetry";
+		el.textContent = `Service: ${json.status.toUpperCase()} | ${dbState} | ${bmsSeen}`;
 	} catch (err) {
 		el.textContent = "Service unreachable";
 	}
@@ -52,12 +49,15 @@ async function refreshHealth() {
 
 function renderLive(modules) {
 	const grid = document.getElementById("moduleGrid");
-	if (!Array.isArray(modules) || modules.length === 0) {
+	const visibleModules = Array.isArray(modules)
+		? modules.filter((item) => Number(item.moduleId) === 1)
+		: [];
+	if (visibleModules.length === 0) {
 		grid.innerHTML = "<div class='module-card'>No telemetry yet.</div>";
 		return;
 	}
 
-	grid.innerHTML = modules.map((item) => {
+	grid.innerHTML = visibleModules.map((item) => {
 		const cells = Array.isArray(item.cellsMv) ? item.cellsMv : [];
 		const statusInfo = describeStatus(item.statusCode);
 		const cellText = cells.length
@@ -65,7 +65,7 @@ function renderLive(modules) {
 			: "-";
 		return `
 			<div class="module-card">
-				<h3>Module ${item.moduleId}</h3>
+				<h3>BMS ${item.moduleId}</h3>
 				<div class="metric"><span>Voltage</span><strong>${Number(item.voltageV).toFixed(3)} V</strong></div>
 				<div class="metric"><span>Current</span><strong>${Number(item.currentA).toFixed(3)} A</strong></div>
 				<div class="metric"><span>SOC</span><strong>${Number(item.socPercent).toFixed(2)} %</strong></div>
@@ -154,7 +154,7 @@ function renderStats(stats, moduleId) {
 	const container = document.getElementById("statsCards");
 	const sampleLabel = `Latest ${statsState.sampleLimit}`;
 	if (!Array.isArray(stats) || stats.length === 0) {
-		container.innerHTML = `<div class='stats-card'>No saved samples available yet for module ${moduleId}.</div>`;
+		container.innerHTML = `<div class='stats-card'>No saved samples available yet for BMS ${moduleId}.</div>`;
 		return;
 	}
 
@@ -162,7 +162,7 @@ function renderStats(stats, moduleId) {
 	const lastStatus = describeStatus(item.lastStatusCode);
 	container.innerHTML = `
 		<div class="stats-card">
-			<h3>Module ${item.moduleId}</h3>
+			<h3>BMS ${item.moduleId}</h3>
 			<div class="metric"><span>Avg SOC</span><strong class="value">${Number(item.avgSoc).toFixed(2)} %</strong></div>
 			<div class="metric"><span>SOC Range</span><strong>${Number(item.minSoc).toFixed(2)} - ${Number(item.maxSoc).toFixed(2)} %</strong></div>
 			<div class="metric"><span>Voltage Range</span><strong>${Number(item.minVoltage).toFixed(3)} - ${Number(item.maxVoltage).toFixed(3)} V</strong></div>
@@ -301,7 +301,7 @@ function renderStatisticsCharts(history, moduleId) {
 	const container = document.getElementById("statsCharts");
 	if (!Array.isArray(history) || history.length === 0) {
 		statsState.zoomedChartKey = null;
-		container.innerHTML = `<div class="chart-card"><div class="chart-empty">No history data for module ${moduleId} yet.</div></div>`;
+		container.innerHTML = `<div class="chart-card"><div class="chart-empty">No history data for BMS ${moduleId} yet.</div></div>`;
 		return;
 	}
 	const zoomedKey = statsState.zoomedChartKey;
@@ -480,26 +480,27 @@ function statusBadge(online) {
 	return `<span class="status-badge ${online ? "ok" : "off"}">${online ? "ONLINE" : "OFFLINE"}</span>`;
 }
 
-function renderRpiStatus(status) {
-	const summary = document.getElementById("rpiStatusSummary");
-	const sourcesBody = document.getElementById("rpiSourcesTableBody");
-	const modulesBody = document.getElementById("rpiModulesTableBody");
+function renderBmsConnectionStatus(status) {
+	const summary = document.getElementById("bmsConnectionSummary");
+	const sourcesBody = document.getElementById("bmsConnectionSourcesTableBody");
+	const deviceBody = document.getElementById("bmsConnectionDeviceTableBody");
 
 	if (!status || typeof status !== "object") {
-		summary.textContent = "No status data available.";
-		sourcesBody.innerHTML = "<tr><td colspan='6'>No sources.</td></tr>";
-		modulesBody.innerHTML = "<tr><td colspan='4'>No module status.</td></tr>";
+		summary.textContent = "No BMS connection status available.";
+		sourcesBody.innerHTML = "<tr><td colspan='5'>No computer/backend packets recorded yet.</td></tr>";
+		deviceBody.innerHTML = "<tr><td colspan='4'>No BMS telemetry recorded yet.</td></tr>";
 		return;
 	}
 
 	const sources = Array.isArray(status.sources) ? status.sources : [];
-	const modules = Array.isArray(status.modules) ? status.modules : [];
+	const devices = Array.isArray(status.modules) ? status.modules : [];
+	const device = devices.find((item) => Number(item.moduleId) === 1) || devices[0] || null;
 	const threshold = Number(status.offlineThresholdSec || 0);
 
-	summary.innerHTML = `Overall: ${statusBadge(!!status.overallOnline)} | Offline threshold: <strong>${threshold}s</strong>`;
+	summary.innerHTML = `Computer to BMS communication: ${statusBadge(!!status.overallOnline)} | Offline threshold: <strong>${threshold}s</strong>`;
 
 	if (!sources.length) {
-		sourcesBody.innerHTML = "<tr><td colspan='6'>No ingest sources recorded yet.</td></tr>";
+		sourcesBody.innerHTML = "<tr><td colspan='5'>No computer/backend packets recorded yet.</td></tr>";
 	} else {
 		sourcesBody.innerHTML = sources.map((source) => `
 			<tr>
@@ -508,43 +509,45 @@ function renderRpiStatus(status) {
 				<td>${Number(source.secondsSinceSeen) >= 0 ? Number(source.secondsSinceSeen) : "-"}</td>
 				<td>${statusBadge(!!source.online)}</td>
 				<td>${source.acceptedCount ?? "-"}</td>
-				<td>${source.lastModuleId ?? "-"}</td>
 			</tr>
 		`).join("");
 	}
 
-	if (!modules.length) {
-		modulesBody.innerHTML = "<tr><td colspan='4'>No modules reported yet.</td></tr>";
+	if (!device) {
+		deviceBody.innerHTML = "<tr><td colspan='4'>No telemetry from BMS 1 yet.</td></tr>";
 	} else {
-		modulesBody.innerHTML = modules.map((module) => `
+		deviceBody.innerHTML = `
 			<tr>
-				<td>${module.moduleId}</td>
-				<td>${module.lastSeen || "-"}</td>
-				<td>${Number(module.secondsSinceSeen) >= 0 ? Number(module.secondsSinceSeen) : "-"}</td>
-				<td>${statusBadge(!!module.online)}</td>
+				<td>BMS 1</td>
+				<td>${device.lastSeen || "-"}</td>
+				<td>${Number(device.secondsSinceSeen) >= 0 ? Number(device.secondsSinceSeen) : "-"}</td>
+				<td>${statusBadge(!!device.online)}</td>
 			</tr>
-		`).join("");
+		`;
 	}
 }
 
 function renderSettings(modules) {
 	const tableBody = document.getElementById("settingsTableBody");
 	const keySelect = document.getElementById("settingsKey");
+	const visibleModules = Array.isArray(modules)
+		? modules.filter((module) => Number(module.moduleId) === 1)
+		: [];
 
-	if (!Array.isArray(modules) || modules.length === 0) {
-		tableBody.innerHTML = "<tr><td colspan='6'>No settings available.</td></tr>";
+	if (visibleModules.length === 0) {
+		tableBody.innerHTML = "<tr><td colspan='3'>No settings available.</td></tr>";
 		keySelect.innerHTML = "";
 		cachedSettingsRows = [];
 		return;
 	}
 
 	const modulesById = new Map();
-	modules.forEach((module) => {
+	visibleModules.forEach((module) => {
 		modulesById.set(Number(module.moduleId), module.settings || []);
 	});
 
 	const rowByKey = new Map();
-	modules.forEach((module) => {
+	visibleModules.forEach((module) => {
 		(module.settings || []).forEach((setting) => {
 			if (!rowByKey.has(setting.key)) {
 				rowByKey.set(setting.key, {
@@ -570,9 +573,6 @@ function renderSettings(modules) {
 				<td>${row.label}${rw}</td>
 				<td>${row.unit}</td>
 				<td>${formatSettingValue(row.values[1])}</td>
-				<td>${formatSettingValue(row.values[2])}</td>
-				<td>${formatSettingValue(row.values[3])}</td>
-				<td>${formatSettingValue(row.values[4])}</td>
 			</tr>
 		`;
 	}).join("");
@@ -934,11 +934,11 @@ async function refreshData() {
 	}
 
 	try {
-		const rpiResponse = await fetch(`${API_BASE}/api/rpi-status`);
-		const rpiStatus = await rpiResponse.json();
-		renderRpiStatus(rpiStatus);
+		const bmsConnectionResponse = await fetch(`${API_BASE}/api/bms-connection`);
+		const bmsConnectionStatus = await bmsConnectionResponse.json();
+		renderBmsConnectionStatus(bmsConnectionStatus);
 	} catch (err) {
-		renderRpiStatus(null);
+		renderBmsConnectionStatus(null);
 	}
 
 	await refreshUartStatus();

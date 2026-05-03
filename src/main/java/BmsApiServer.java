@@ -42,7 +42,7 @@ public class BmsApiServer {
 	private static final int MAX_HISTORY = 5000;
 	private static final int MAX_EVENTS = 2000;
 	private static final int EVENT_DB_DISCONNECTED = 9001;
-	private static final int EVENT_RPI_DISCONNECTED = 9002;
+	private static final int EVENT_DATA_SOURCE_DISCONNECTED = 9002;
 	private static final int EVENT_BMS_DISCONNECTED = 9003;
 	private static final int MAX_UART_LOG_LINES = 60;
 	private static final int MIN_REAL_CELL_MV = 500;
@@ -94,7 +94,8 @@ public class BmsApiServer {
 		server.createContext("/api/history", new HistoryHandler());
 		server.createContext("/api/events", new EventHandler());
 		server.createContext("/api/statistics", new StatisticsHandler());
-		server.createContext("/api/rpi-status", new RpiStatusHandler());
+		server.createContext("/api/bms-connection", new BmsConnectionHandler());
+		server.createContext("/api/rpi-status", new BmsConnectionHandler());
 		server.createContext("/api/cell-settings", new CellSettingsHandler());
 		server.createContext("/api/runtime-config", new RuntimeConfigHandler());
 		server.createContext("/api/uart-control", new UartControlHandler());
@@ -1081,9 +1082,10 @@ public class BmsApiServer {
 
 	private static List<BmsEvent> buildSystemEvents() {
 		List<BmsEvent> result = new ArrayList<>();
-		int rpiOfflineThresholdSec = parseIntEnv("BMS_RPI_OFFLINE_SECONDS", 30);
-		if (rpiOfflineThresholdSec < 1) {
-			rpiOfflineThresholdSec = 30;
+		int dataSourceOfflineThresholdSec = parseIntEnv("BMS_CONNECTION_OFFLINE_SECONDS",
+			parseIntEnv("BMS_RPI_OFFLINE_SECONDS", 30));
+		if (dataSourceOfflineThresholdSec < 1) {
+			dataSourceOfflineThresholdSec = 30;
 		}
 
 		if (dbWasConnected && !isDbConnectionAlive()) {
@@ -1096,19 +1098,19 @@ public class BmsApiServer {
 				if (state == null || state.lastSeen == null) {
 					continue;
 				}
-				if (secondsSince(state.lastSeen) <= rpiOfflineThresholdSec) {
+				if (secondsSince(state.lastSeen) <= dataSourceOfflineThresholdSec) {
 					anySourceOnline = true;
 					break;
 				}
 			}
 			if (!anySourceOnline) {
-				result.add(systemEvent(0, EVENT_RPI_DISCONNECTED, "ERROR", "RPi connection lost"));
+				result.add(systemEvent(0, EVENT_DATA_SOURCE_DISCONNECTED, "ERROR", "Computer to BMS telemetry connection lost"));
 			}
 		}
 
-		int bmsOfflineThresholdSec = parseIntEnv("BMS_BMS_OFFLINE_SECONDS", rpiOfflineThresholdSec);
+		int bmsOfflineThresholdSec = parseIntEnv("BMS_BMS_OFFLINE_SECONDS", dataSourceOfflineThresholdSec);
 		if (bmsOfflineThresholdSec < 1) {
-			bmsOfflineThresholdSec = rpiOfflineThresholdSec;
+			bmsOfflineThresholdSec = dataSourceOfflineThresholdSec;
 		}
 
 		List<Integer> trackedModules = new ArrayList<>();
@@ -1294,7 +1296,7 @@ public class BmsApiServer {
 		}
 	}
 
-	private static class RpiStatusHandler implements HttpHandler {
+	private static class BmsConnectionHandler implements HttpHandler {
 		@Override
 		public void handle(HttpExchange exchange) throws IOException {
 			if (handleCorsAndPreflight(exchange)) {
@@ -1305,7 +1307,8 @@ public class BmsApiServer {
 				return;
 			}
 
-			int offlineThresholdSec = parseIntEnv("BMS_RPI_OFFLINE_SECONDS", 30);
+			int offlineThresholdSec = parseIntEnv("BMS_CONNECTION_OFFLINE_SECONDS",
+				parseIntEnv("BMS_BMS_OFFLINE_SECONDS", parseIntEnv("BMS_RPI_OFFLINE_SECONDS", 30)));
 			if (offlineThresholdSec < 1) {
 				offlineThresholdSec = 30;
 			}
@@ -1349,7 +1352,7 @@ public class BmsApiServer {
 						sourcesJson.append(",\"lastPayload\":\"").append(escapeJson(rs.getString("last_payload"))).append("\"}");
 					}
 				} catch (Exception ex) {
-					System.err.println("[BmsApiServer] Failed loading RPi sources from DB: " + ex.getMessage());
+					System.err.println("[BmsApiServer] Failed loading BMS connection sources from DB: " + ex.getMessage());
 				}
 			} else {
 				List<Map.Entry<String, IngestSourceState>> sourceEntries = new ArrayList<>(ingestSources.entrySet());
@@ -1406,7 +1409,7 @@ public class BmsApiServer {
 			Map<Integer, Instant> moduleLastSeen = new HashMap<>();
 			if (dbConnection != null) {
 				String moduleSql =
-					"SELECT module_id, MAX(created_at) AS last_seen FROM bms_readings GROUP BY module_id";
+					"SELECT module_id, MAX(created_at) AS last_seen FROM bms_readings WHERE module_id = 1 GROUP BY module_id";
 				try (Statement stmt = dbConnection.createStatement();
 					 java.sql.ResultSet rs = stmt.executeQuery(moduleSql)) {
 					while (rs.next()) {
@@ -1430,27 +1433,22 @@ public class BmsApiServer {
 
 			StringBuilder modulesJson = new StringBuilder();
 			modulesJson.append('[');
-			for (int moduleId = 1; moduleId <= 4; moduleId++) {
-				if (moduleId > 1) {
-					modulesJson.append(',');
-				}
-				Instant lastSeen = moduleLastSeen.get(moduleId);
-				long seconds = lastSeen == null ? Long.MAX_VALUE : secondsSince(lastSeen);
-				boolean online = seconds <= offlineThresholdSec;
-				if (online) {
-					anyOnline = true;
-				}
-
-				modulesJson.append("{\"moduleId\":").append(moduleId);
-				if (lastSeen == null) {
-					modulesJson.append(",\"lastSeen\":\"\"");
-					modulesJson.append(",\"secondsSinceSeen\":-1");
-				} else {
-					modulesJson.append(",\"lastSeen\":\"").append(escapeJson(lastSeen.toString())).append("\"");
-					modulesJson.append(",\"secondsSinceSeen\":").append(seconds);
-				}
-				modulesJson.append(",\"online\":").append(online).append('}');
+			int moduleId = 1;
+			Instant lastSeen = moduleLastSeen.get(moduleId);
+			long seconds = lastSeen == null ? Long.MAX_VALUE : secondsSince(lastSeen);
+			boolean online = seconds <= offlineThresholdSec;
+			if (online) {
+				anyOnline = true;
 			}
+			modulesJson.append("{\"moduleId\":").append(moduleId);
+			if (lastSeen == null) {
+				modulesJson.append(",\"lastSeen\":\"\"");
+				modulesJson.append(",\"secondsSinceSeen\":-1");
+			} else {
+				modulesJson.append(",\"lastSeen\":\"").append(escapeJson(lastSeen.toString())).append("\"");
+				modulesJson.append(",\"secondsSinceSeen\":").append(seconds);
+			}
+			modulesJson.append(",\"online\":").append(online).append('}');
 			modulesJson.append(']');
 
 			String json =
