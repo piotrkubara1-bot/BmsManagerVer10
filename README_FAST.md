@@ -132,3 +132,21 @@ albo:
 ```powershell
 .\stop_all.bat
 ```
+
+## 11. Gdy po zatrzymaniu dalej cos dziala
+
+Jezeli port jest zajety, Web GUI dziwnie dziala albo stare okno Java zostalo w tle, uzyj mocnego stopu:
+
+```powershell
+.\stop_all.bat
+taskkill /F /IM java.exe
+taskkill /F /IM javaw.exe
+```
+
+Potem uruchom od nowa:
+
+```powershell
+.\run_server_stack.bat
+```
+
+Komunikat `ERROR: The process "javaw.exe" not found.` jest OK. Oznacza tylko, ze nie bylo takiego procesu do zamkniecia.

@@ -150,6 +150,36 @@ albo:
 .\stop_all.bat
 ```
 
+### Mocne zatrzymanie, gdy program zachowuje sie dziwnie
+
+Jezeli po zatrzymaniu program dalej dziala, port jest zajety albo Web GUI/desktop viewer dziwnie sie odswieza, zrob pelne czyszczenie procesow Java:
+
+```powershell
+.\stop_all.bat
+taskkill /F /IM java.exe
+taskkill /F /IM javaw.exe
+```
+
+Co to robi:
+
+- `.\stop_all.bat` zatrzymuje procesy nasluchujace na portach projektu,
+- `taskkill /F /IM java.exe` zamyka pozostale procesy Java w konsoli,
+- `taskkill /F /IM javaw.exe` zamyka pozostale procesy Java uruchomione jako okna.
+
+Jezeli zobaczysz komunikat:
+
+```text
+ERROR: The process "javaw.exe" not found.
+```
+
+to nie jest blad projektu. To znaczy tylko, ze nie bylo procesu `javaw.exe` do zamkniecia.
+
+Po takim czyszczeniu uruchom projekt od nowa:
+
+```powershell
+.\run_server_stack.bat
+```
+
 ## 7. Jak używać Web GUI
 
 Web GUI otwierasz tutaj:
