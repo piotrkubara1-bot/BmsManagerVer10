@@ -46,7 +46,6 @@ public class MainActivity extends AppCompatActivity {
     private BmsChartView voltageChart;
     private BmsChartView currentChart;
     private BmsChartView socChart;
-    private BmsChartView cellsChart;
 
     private boolean autoRefresh = true;
     private boolean refreshInProgress = false;
@@ -78,7 +77,6 @@ public class MainActivity extends AppCompatActivity {
         voltageChart = findViewById(R.id.voltageChart);
         currentChart = findViewById(R.id.currentChart);
         socChart = findViewById(R.id.socChart);
-        cellsChart = findViewById(R.id.cellsChart);
 
         baseUrlInput.setText(loadBaseUrl());
         configureCharts();
@@ -121,8 +119,6 @@ public class MainActivity extends AppCompatActivity {
         currentChart.setLineColor(0xFFFFC857);
         socChart.setTitle("SOC (%)");
         socChart.setLineColor(0xFF75D99D);
-        cellsChart.setTitle("Cell voltages (V)");
-        cellsChart.setLineColor(0xFFB48CFF);
     }
 
     private void updateAutoRefreshButton() {
@@ -222,7 +218,6 @@ public class MainActivity extends AppCompatActivity {
         List<Float> voltage = new ArrayList<>();
         List<Float> current = new ArrayList<>();
         List<Float> soc = new ArrayList<>();
-        List<Float> cellAverage = new ArrayList<>();
 
         for (int i = historyArray.length() - 1; i >= 0; i--) {
             JSONObject item = historyArray.optJSONObject(i);
@@ -232,20 +227,11 @@ public class MainActivity extends AppCompatActivity {
             voltage.add((float) item.optDouble("voltageV"));
             current.add((float) item.optDouble("currentA"));
             soc.add((float) item.optDouble("socPercent"));
-            JSONArray cells = readCellsArray(item);
-            if (cells != null && cells.length() > 0) {
-                float sum = 0;
-                for (int c = 0; c < cells.length(); c++) {
-                    sum += cells.optInt(c) / 1000.0f;
-                }
-                cellAverage.add(sum / cells.length());
-            }
         }
 
         voltageChart.setValues(voltage);
         currentChart.setValues(current);
         socChart.setValues(soc);
-        cellsChart.setValues(cellAverage);
     }
 
     private String fetchText(String urlValue) throws Exception {

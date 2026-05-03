@@ -127,12 +127,6 @@
             android:layout_height="190dp"
             android:layout_marginTop="14dp" />
 
-        <com.piotrek.bmsmobileviewer.BmsChartView
-            android:id="@+id/cellsChart"
-            android:layout_width="match_parent"
-            android:layout_height="190dp"
-            android:layout_marginTop="14dp" />
-
         <TextView
             android:id="@+id/cellsText"
             android:layout_width="match_parent"
