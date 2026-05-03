@@ -1593,13 +1593,7 @@ public class BmsApiServer {
 			}
 
 			String message;
-			boolean restartUart = false;
-			synchronized (BmsApiServer.class) {
-				restartUart = uartProcess != null && serialPort.equalsIgnoreCase(uartProcessPort);
-				if (restartUart) {
-					stopUartProcess();
-				}
-			}
+			boolean restartUart = releaseSerialPortForMaintenance(serialPort);
 			try (TinyBmsUartSettingsService uart = new TinyBmsUartSettingsService(serialPort, parseIntEnv("SERIAL_BAUD", 115200))) {
 				switch (action) {
 					case "reset":
@@ -1617,6 +1611,9 @@ public class BmsApiServer {
 					default:
 						writeJson(exchange, 400, "{\"error\":\"action must be reset, clear-events or clear-statistics\"}");
 						return;
+				}
+				if (!uart.lastResponseHex().isEmpty()) {
+					message += " Response: " + uart.lastResponseHex() + ".";
 				}
 			} catch (Exception ex) {
 				if (restartUart) {
@@ -1889,6 +1886,43 @@ public class BmsApiServer {
 				process.destroyForcibly();
 			}
 		}
+	}
+
+	private static boolean releaseSerialPortForMaintenance(String serialPort) {
+		boolean shouldRestart = false;
+		synchronized (BmsApiServer.class) {
+			shouldRestart = uartProcess != null && serialPort.equalsIgnoreCase(uartProcessPort);
+			if (shouldRestart) {
+				stopUartProcess();
+			}
+		}
+
+		String normalizedPort = firstNonBlank(serialPort, "").trim().toUpperCase(Locale.ROOT);
+		ProcessHandle.allProcesses()
+			.filter(handle -> handle.pid() != ProcessHandle.current().pid())
+			.filter(handle -> {
+				String commandLine = handle.info().commandLine().orElse("").toUpperCase(Locale.ROOT);
+				return commandLine.contains("BMSUARTSENDER")
+					&& (commandLine.contains(normalizedPort) || commandLine.contains("--PORT=" + normalizedPort));
+			})
+			.forEach(handle -> {
+				appendUartLog("[UART] Stopping external sender before maintenance command on " + normalizedPort);
+				handle.destroy();
+				try {
+					handle.onExit().get(2, TimeUnit.SECONDS);
+				} catch (Exception ignored) {
+				}
+				if (handle.isAlive()) {
+					handle.destroyForcibly();
+				}
+			});
+
+		try {
+			Thread.sleep(800L);
+		} catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+		}
+		return shouldRestart;
 	}
 
 	private static void startUartLogPump(Process process) {

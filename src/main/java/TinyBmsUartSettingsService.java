@@ -26,6 +26,7 @@ public class TinyBmsUartSettingsService implements AutoCloseable {
     private final SerialPort port;
     private final InputStream input;
     private final OutputStream output;
+    private byte[] lastResponse = new byte[0];
 
     public TinyBmsUartSettingsService(String portName, int baudRate) throws IOException {
         if (portName == null || portName.trim().isEmpty()) {
@@ -45,6 +46,7 @@ public class TinyBmsUartSettingsService implements AutoCloseable {
 
         input = port.getInputStream();
         output = port.getOutputStream();
+        drainInput();
     }
 
     public static boolean supportsKey(String key) {
@@ -81,36 +83,52 @@ public class TinyBmsUartSettingsService implements AutoCloseable {
     }
 
     public void resetBms() throws IOException {
-        sendMaintenanceCommand(OPTION_RESET_BMS);
+        sendMaintenanceCommand(OPTION_RESET_BMS, true);
     }
 
     public void clearEvents() throws IOException {
-        sendMaintenanceCommand(OPTION_CLEAR_EVENTS);
+        sendMaintenanceCommand(OPTION_CLEAR_EVENTS, false);
     }
 
     public void clearStatistics() throws IOException {
-        sendMaintenanceCommand(OPTION_CLEAR_STATISTICS);
+        sendMaintenanceCommand(OPTION_CLEAR_STATISTICS, false);
     }
 
-    private void sendMaintenanceCommand(byte option) throws IOException {
+    public String lastResponseHex() {
+        return toHex(lastResponse);
+    }
+
+    private void sendMaintenanceCommand(byte option, boolean allowNoAck) throws IOException {
         byte[] command = new byte[] {(byte) 0xAA, RESET_COMMAND, option};
-        byte[] response = sendRequest(command, 5, 1200L);
+        byte[] response = sendRequest(command, 5, 2000L, RESET_COMMAND);
         if (response == null || response.length < 3) {
+            if (allowNoAck) {
+                return;
+            }
             throw new IOException("No response from TinyBMS.");
         }
         if (response[0] != (byte) 0xAA || response[1] != 0x01 || response[2] != RESET_COMMAND) {
-            throw new IOException("Unexpected TinyBMS response.");
+            throw new IOException("Unexpected TinyBMS response: " + toHex(response));
         }
     }
 
     private void sendWrite(byte[] data) throws IOException {
-        sendRequest(data, 128, 800L);
+        sendRequest(data, 128, 800L, -1);
     }
 
-    private byte[] sendRequest(byte[] data, int maxResponseBytes, long timeoutMillis) throws IOException {
+    private byte[] sendRequest(byte[] data, int maxResponseBytes, long timeoutMillis, int expectedCommand) throws IOException {
+        lastResponse = new byte[0];
+        drainInput();
         byte[] packet = addCrc(data);
         output.write(packet);
         output.flush();
+
+        byte[] response;
+        if (expectedCommand >= 0) {
+            response = readFrame(expectedCommand, maxResponseBytes, timeoutMillis);
+            lastResponse = response == null ? new byte[0] : response;
+            return response;
+        }
 
         long deadline = System.currentTimeMillis() + timeoutMillis;
         byte[] buffer = new byte[Math.max(maxResponseBytes, 16)];
@@ -122,10 +140,75 @@ public class TinyBmsUartSettingsService implements AutoCloseable {
             }
             int read = input.read(buffer, 0, Math.min(buffer.length, available));
             if (read > 0) {
-                return Arrays.copyOf(buffer, read);
+                response = Arrays.copyOf(buffer, read);
+                lastResponse = response;
+                return response;
             }
         }
         return null;
+    }
+
+    private byte[] readFrame(int expectedCommand, int maxResponseBytes, long timeoutMillis) throws IOException {
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        while (System.currentTimeMillis() < deadline) {
+            int first = readOne(deadline);
+            if (first < 0) {
+                return null;
+            }
+            if (first != 0xAA) {
+                continue;
+            }
+
+            int lenOrType = readOne(deadline);
+            if (lenOrType < 0) {
+                return null;
+            }
+            int command = readOne(deadline);
+            if (command < 0) {
+                return null;
+            }
+            if (expectedCommand >= 0 && command != expectedCommand) {
+                continue;
+            }
+
+            byte[] response = new byte[Math.max(5, Math.min(maxResponseBytes, 512))];
+            response[0] = (byte) first;
+            response[1] = (byte) lenOrType;
+            response[2] = (byte) command;
+            int offset = 3;
+            while (offset < 5 && System.currentTimeMillis() < deadline) {
+                int next = readOne(deadline);
+                if (next < 0) {
+                    break;
+                }
+                response[offset++] = (byte) next;
+            }
+            return Arrays.copyOf(response, offset);
+        }
+        return null;
+    }
+
+    private int readOne(long deadline) throws IOException {
+        while (System.currentTimeMillis() < deadline) {
+            if (input.available() > 0) {
+                return input.read() & 0xFF;
+            }
+            sleepQuietly(10L);
+        }
+        return -1;
+    }
+
+    private void drainInput() throws IOException {
+        long deadline = System.currentTimeMillis() + 150L;
+        byte[] scratch = new byte[128];
+        while (System.currentTimeMillis() < deadline) {
+            int available = input.available();
+            if (available <= 0) {
+                sleepQuietly(10L);
+                continue;
+            }
+            input.read(scratch, 0, Math.min(scratch.length, available));
+        }
     }
 
     private static void sleepQuietly(long millis) throws IOException {
@@ -150,6 +233,20 @@ public class TinyBmsUartSettingsService implements AutoCloseable {
         output[output.length - 2] = (byte) (crc & 0xFF);
         output[output.length - 1] = (byte) ((crc >> 8) & 0xFF);
         return output;
+    }
+
+    private static String toHex(byte[] data) {
+        if (data == null || data.length == 0) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (byte value : data) {
+            if (builder.length() > 0) {
+                builder.append(' ');
+            }
+            builder.append(String.format("%02X", value & 0xFF));
+        }
+        return builder.toString();
     }
 
     @Override
