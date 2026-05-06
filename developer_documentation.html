@@ -233,7 +233,6 @@
     <a class="navlink" href="#protocol">TinyBMS UART</a>
     <a class="navlink" href="#function-catalog">Katalog funkcji</a>
     <a class="navlink" href="#debugging">Debugowanie</a>
-    <a class="navlink" href="#changes">Jak rozwijac projekt</a>
   </aside>
 
   <main>
@@ -626,27 +625,6 @@ taskkill /F /IM javaw.exe
       </details>
     </section>
 
-    <section id="changes" data-layer="backend uart ui android database script">
-      <h2>Jak rozwijac projekt bez psucia calosci</h2>
-      <div class="grid">
-        <div class="card">
-          <h3>Dodajesz nowy odczyt TinyBMS?</h3>
-          <p>Dodaj komende w <code>BmsUartSender</code> albo <code>TinyBmsUartSettingsService</code>, sprawdz CRC i dopiero potem wystaw dane przez API.</p>
-        </div>
-        <div class="card">
-          <h3>Dodajesz pole do telemetrii?</h3>
-          <p>Zmien model <code>BmsReading</code>, zapis w bazie, JSON w API, Web GUI i Android. Inaczej klient nie zobaczy pola.</p>
-        </div>
-        <div class="card">
-          <h3>Dodajesz ustawienie BMS?</h3>
-          <p>Dodaj <code>SettingDefinition</code>, mapowanie rejestru w <code>TinyBmsUartSettingsService</code> i walidacje zakresu.</p>
-        </div>
-        <div class="card">
-          <h3>Zmiana w Androidzie?</h3>
-          <p>Buduj z JDK 17+ albo JDK 23: <code>gradlew.bat :app:compileDebugJavaWithJavac</code>.</p>
-        </div>
-      </div>
-    </section>
   </main>
 </div>
 
